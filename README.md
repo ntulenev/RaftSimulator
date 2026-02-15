@@ -3,6 +3,11 @@
 RaftSimulator is a small raft election simulator with HTTP-based node-to-node RPC.
 It focuses on leader election and heartbeat stability for local testing scenarios.
 
+> ⚠️ Disclaimer  
+> This is not a production-ready implementation of the Raft algorithm.  
+> The project was created purely for educational and demonstration purposes to help illustrate the core concepts and mechanics of Raft consensus.
+
+
 ## How it works
 1. Each node hosts HTTP endpoints for request-vote and append-entries RPC.
 2. Nodes start as followers and trigger elections when the timeout elapses.
