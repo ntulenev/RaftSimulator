@@ -38,33 +38,17 @@ All options live under the `Raft` section.
 }
 ```
 
-## Running multiple nodes locally
-Use environment variables to override per-node configuration.
-Example for five nodes:
 
-```bash
-# Node 1
-RAFT_NodeId=1 RAFT_Port=5001 dotnet run --project RaftSimulator
-# Node 2
-RAFT_NodeId=2 RAFT_Port=5002 dotnet run --project RaftSimulator
-# Node 3
-RAFT_NodeId=3 RAFT_Port=5003 dotnet run --project RaftSimulator
-# Node 4
-RAFT_NodeId=4 RAFT_Port=5004 dotnet run --project RaftSimulator
-# Node 5
-RAFT_NodeId=5 RAFT_Port=5005 dotnet run --project RaftSimulator
-```
+## Screenshots
+Start screen before elections begin:
 
-## Architecture
-- `Abstractions`: interfaces used across layers.
-- `Models`: domain and configuration models.
-- `Logic`: raft state machine and hosted service.
-- `Transport`: HTTP client and DTO mapping.
-- `API`: HTTP endpoint mapping.
-- `Presentation`: console logging.
-  - Uses `Spectre.Console` for formatted output.
+![Start screen before elections](StartNode.png)
 
-## Tests
-```bash
-dotnet test
-```
+Election results with leader and followers:
+
+![Election results](Elections.png)
+
+Out of quorum (only one leader and one follower; minimum three nodes required):
+
+![Out of quorum](OutOfQuorum.png)
+
