@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RaftSimulator/RaftSimulator.csproj" />
+  <Project Path="RaftSimulator.Tests/RaftSimulator.Tests.csproj" />
+</Solution>
