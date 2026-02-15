@@ -253,7 +253,9 @@ internal sealed class RaftNode : IRaftNode
     {
         foreach (var peer in _settings.Peers)
         {
-            _ = RequestVoteFromPeerAsync(peer, term, cancellationToken);
+            ObserveTask(
+                RequestVoteFromPeerAsync(peer, term, cancellationToken),
+                $"RequestVote -> Node {peer.Id:00} (term {term})");
         }
 
         return Task.CompletedTask;
@@ -367,7 +369,9 @@ internal sealed class RaftNode : IRaftNode
         var roundId = StartHeartbeatRound();
         foreach (var peer in _settings.Peers)
         {
-            _ = SendHeartbeatToPeerAsync(peer, term, roundId, cancellationToken);
+            ObserveTask(
+                SendHeartbeatToPeerAsync(peer, term, roundId, cancellationToken),
+                $"AppendEntries -> Node {peer.Id:00} (term {term})");
         }
         return Task.CompletedTask;
     }
@@ -394,6 +398,7 @@ internal sealed class RaftNode : IRaftNode
                 return;
             }
 
+            HandleAppendEntriesResponse(response);
             RegisterHeartbeatAck(roundId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -543,6 +548,50 @@ internal sealed class RaftNode : IRaftNode
         }
 
         _log.WriteNode(Id, $"Cluster out of quorum: {reachable}/{total} (need {needed}).");
+    }
+
+    private void HandleAppendEntriesResponse(RaftAppendEntriesResponse response)
+    {
+        List<string> logs;
+
+        lock (_gate)
+        {
+            if (response.Term <= _currentTerm)
+            {
+                return;
+            }
+
+            logs =
+            [
+                $"Discovered higher term {response.Term} from Node {response.FromId:00}.",
+                BecomeFollowerUnsafe(response.Term, null)
+            ];
+        }
+
+        foreach (var logLine in logs)
+        {
+            _log.WriteNode(Id, logLine);
+        }
+    }
+
+    private void ObserveTask(Task task, string context)
+    {
+        _ = task.ContinueWith(
+            t =>
+            {
+                var exception = t.Exception?.GetBaseException();
+                if (exception is null)
+                {
+                    return;
+                }
+
+                _log.WriteNode(
+                    Id,
+                    $"{context} failed: {exception.GetType().Name}: {exception.Message}");
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private readonly RaftSettings _settings;
