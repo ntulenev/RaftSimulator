@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Threading.Channels;
 
@@ -59,6 +60,7 @@ internal sealed class RaftNode : IRaftNode
                 var completed = await Task
                     .WhenAny(delayTask, signalTask)
                     .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 if (completed == signalTask)
                 {
@@ -195,6 +197,8 @@ internal sealed class RaftNode : IRaftNode
             _votedFor = null;
             _leaderId = null;
             _votesReceived = 0;
+            _leaderSince = default;
+            _lastHeartbeatAckAt.Clear();
             _lastReportedTerm = -1;
             _nextElectionDeadline = GetNextElectionDeadlineUnsafe();
             _nextHeartbeatAt = DateTimeOffset.UtcNow + _settings.HeartbeatInterval;
@@ -331,10 +335,13 @@ internal sealed class RaftNode : IRaftNode
 
                 if (_votesReceived >= _settings.Majority)
                 {
+                    var now = DateTimeOffset.UtcNow;
                     _role = RaftRole.Leader;
                     _leaderId = Id;
                     _votesReceived = 0;
-                    _nextHeartbeatAt = DateTimeOffset.UtcNow;
+                    _nextHeartbeatAt = now;
+                    _leaderSince = now;
+                    _lastHeartbeatAckAt.Clear();
                     SignalScheduleChangeUnsafe();
                     logs.Add($"Became leader for term {_currentTerm}.");
                     becameLeader = true;
@@ -366,11 +373,11 @@ internal sealed class RaftNode : IRaftNode
 
     private Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
     {
-        var roundId = StartHeartbeatRound();
+        ReportQuorum();
         foreach (var peer in _settings.Peers)
         {
             ObserveTask(
-                SendHeartbeatToPeerAsync(peer, term, roundId, cancellationToken),
+                SendHeartbeatToPeerAsync(peer, term, cancellationToken),
                 $"AppendEntries -> Node {peer.Id:00} (term {term})");
         }
         return Task.CompletedTask;
@@ -379,7 +386,6 @@ internal sealed class RaftNode : IRaftNode
     private async Task SendHeartbeatToPeerAsync(
         PeerInfo peer,
         int term,
-        int roundId,
         CancellationToken cancellationToken)
     {
         try
@@ -399,7 +405,7 @@ internal sealed class RaftNode : IRaftNode
             }
 
             HandleAppendEntriesResponse(response);
-            RegisterHeartbeatAck(roundId);
+            RegisterHeartbeatAck(peer.Id);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -419,6 +425,8 @@ internal sealed class RaftNode : IRaftNode
         _role = RaftRole.Follower;
         _leaderId = leaderId;
         _votesReceived = 0;
+        _leaderSince = default;
+        _lastHeartbeatAckAt.Clear();
 
         if (term > _currentTerm)
         {
@@ -511,34 +519,36 @@ internal sealed class RaftNode : IRaftNode
     private void SignalScheduleChangeUnsafe() =>
         _ = _scheduleSignal.Writer.TryWrite(true);
 
-    private int StartHeartbeatRound()
+    private void RegisterHeartbeatAck(int peerId) =>
+        _lastHeartbeatAckAt[peerId] = DateTimeOffset.UtcNow;
+
+    private void ReportQuorum()
     {
-        var previousRoundId = Volatile.Read(ref _heartbeatRoundId);
-        var previousAcks = Volatile.Read(ref _heartbeatAcks);
-
-        if (previousRoundId > 0)
-        {
-            ReportQuorum(previousAcks);
-        }
-
-        var newRoundId = Interlocked.Increment(ref _heartbeatRoundId);
-        _ = Interlocked.Exchange(ref _heartbeatAcks, 0);
-        return newRoundId;
-    }
-
-    private void RegisterHeartbeatAck(int roundId)
-    {
-        if (roundId != Volatile.Read(ref _heartbeatRoundId))
+        var leaderSince = GetLeaderSince();
+        if (leaderSince == default)
         {
             return;
         }
 
-        _ = Interlocked.Increment(ref _heartbeatAcks);
-    }
+        var now = DateTimeOffset.UtcNow;
+        var window = GetQuorumWindow();
+        if (now - leaderSince < window)
+        {
+            return;
+        }
 
-    private void ReportQuorum(int peerAcks)
-    {
-        var reachable = peerAcks + 1;
+        var cutoff = now - window;
+        var reachablePeers = 0;
+
+        foreach (var peer in _settings.Peers)
+        {
+            if (_lastHeartbeatAckAt.TryGetValue(peer.Id, out var ackAt) && ackAt >= cutoff)
+            {
+                reachablePeers++;
+            }
+        }
+
+        var reachable = reachablePeers + 1;
         var needed = _settings.Majority;
         var total = _settings.NodeCount;
 
@@ -549,6 +559,17 @@ internal sealed class RaftNode : IRaftNode
 
         _log.WriteNode(Id, $"Cluster out of quorum: {reachable}/{total} (need {needed}).");
     }
+
+    private DateTimeOffset GetLeaderSince()
+    {
+        lock (_gate)
+        {
+            return _leaderSince;
+        }
+    }
+
+    private TimeSpan GetQuorumWindow() =>
+        _settings.HeartbeatInterval + _settings.MaxNetworkDelay;
 
     private void HandleAppendEntriesResponse(RaftAppendEntriesResponse response)
     {
@@ -605,11 +626,11 @@ internal sealed class RaftNode : IRaftNode
     private int? _votedFor;
     private int? _leaderId;
     private int _votesReceived;
+    private DateTimeOffset _leaderSince;
     private DateTimeOffset _nextElectionDeadline;
     private DateTimeOffset _nextHeartbeatAt;
     private int _lastReportedTerm;
-    private int _heartbeatRoundId;
-    private int _heartbeatAcks;
+    private readonly ConcurrentDictionary<int, DateTimeOffset> _lastHeartbeatAckAt = new();
 
     private enum TimeoutActionType
     {

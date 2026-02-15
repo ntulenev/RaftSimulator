@@ -54,4 +54,11 @@ log.WriteSystem(
     $"Peers={settings.Peers.Count}, Majority={settings.Majority}.");
 log.WriteSystem("Press Ctrl+C to stop.");
 
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true;
+    log.WriteSystem("Shutdown requested. Stopping...");
+    app.Lifetime.StopApplication();
+};
+
 await app.RunAsync().ConfigureAwait(false);

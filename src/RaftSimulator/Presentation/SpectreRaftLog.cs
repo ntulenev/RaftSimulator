@@ -6,7 +6,6 @@ using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Domain;
 
 using Spectre.Console;
-using Spectre.Console.Rendering;
 
 namespace RaftSimulator.Presentation;
 
@@ -15,6 +14,8 @@ namespace RaftSimulator.Presentation;
 /// </summary>
 internal sealed partial class SpectreRaftLog : IRaftLog
 {
+    private const int MAX_LOG_LINES = 200;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SpectreRaftLog"/> class.
     /// </summary>
@@ -43,7 +44,8 @@ internal sealed partial class SpectreRaftLog : IRaftLog
         {
             formattedMessage = $"[bold red]{formattedMessage}[/]";
         }
-        WriteLine($"[grey]{time}[/] [bold deepskyblue1][[Node {nodeId:00}]][/] {formattedMessage}");
+        AppendLine($"[grey]{time}[/] [bold deepskyblue1][[Node {nodeId:00}]][/] {formattedMessage}");
+        RenderSnapshot();
     }
 
     /// <inheritdoc />
@@ -53,7 +55,8 @@ internal sealed partial class SpectreRaftLog : IRaftLog
 
         var time = DateTimeOffset.Now.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
         var safeMessage = Markup.Escape(message);
-        WriteLine($"[grey]{time}[/] [bold yellow][[System]][/] {safeMessage}");
+        AppendLine($"[grey]{time}[/] [bold yellow][[System]][/] {safeMessage}");
+        RenderSnapshot();
     }
 
     /// <inheritdoc />
@@ -61,6 +64,63 @@ internal sealed partial class SpectreRaftLog : IRaftLog
     {
         ArgumentNullException.ThrowIfNull(status);
 
+        lock (_gate)
+        {
+            _latestStatus = status;
+        }
+
+        RenderSnapshot();
+    }
+
+    private void AppendLine(string markup)
+    {
+        lock (_gate)
+        {
+            _lines.Add(markup);
+            if (_lines.Count > MAX_LOG_LINES)
+            {
+                _lines.RemoveRange(0, _lines.Count - MAX_LOG_LINES);
+            }
+        }
+    }
+
+    private void RenderSnapshot()
+    {
+        Layout layout;
+        Panel statusPanel;
+        Panel logPanel;
+
+        lock (_gate)
+        {
+            statusPanel = BuildStatusPanel();
+            var maxLines = GetLogLineLimit();
+            logPanel = BuildLogPanel(maxLines);
+
+            layout = new Layout("root")
+                .SplitRows(
+                    new Layout("status").Size(8),
+                    new Layout("logs"));
+
+            _ = layout["status"].Update(statusPanel);
+            _ = layout["logs"].Update(logPanel);
+
+            _console.Clear();
+            _console.Write(layout);
+        }
+    }
+
+    private Panel BuildStatusPanel()
+    {
+        if (_latestStatus is null)
+        {
+            return new Panel(new Markup("[grey]No election result yet.[/]"))
+                .Header("[bold red]Election Result[/]", Justify.Left)
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Red)
+                .Collapse();
+        }
+
+        var status = _latestStatus;
         var grid = new Grid();
         _ = grid.AddColumn(new GridColumn().NoWrap());
         _ = grid.AddColumn();
@@ -75,7 +135,35 @@ internal sealed partial class SpectreRaftLog : IRaftLog
             .BorderColor(Color.Red)
             .Collapse();
 
-        WriteRenderable(panel);
+        return panel;
+    }
+
+    private Panel BuildLogPanel(int maxLines)
+    {
+        var content = _lines.Count == 0
+            ? "[grey]No log entries yet.[/]"
+            : string.Join(Environment.NewLine, _lines.TakeLast(maxLines));
+
+        return new Panel(new Markup(content))
+            .Header("[bold deepskyblue1]Log[/]", Justify.Left)
+            .Border(BoxBorder.Rounded)
+            .BorderColor(Color.Grey);
+    }
+
+    private int GetLogLineLimit()
+    {
+        var height = _console.Profile.Height;
+        if (height <= 0)
+        {
+            return MAX_LOG_LINES;
+        }
+
+        const int statusHeight = 8;
+        const int panelChrome = 3;
+
+        var logHeight = height - statusHeight - 1;
+        var maxLines = logHeight - panelChrome;
+        return Math.Clamp(maxLines, 1, MAX_LOG_LINES);
     }
 
     private static string FormatRole(RaftRole role) => role switch
@@ -125,23 +213,9 @@ internal sealed partial class SpectreRaftLog : IRaftLog
     private static bool IsQuorumWarning(string message) =>
         message.StartsWith("Cluster out of quorum", StringComparison.OrdinalIgnoreCase);
 
-    private void WriteLine(string markup)
-    {
-        lock (_gate)
-        {
-            _console.MarkupLine(markup);
-        }
-    }
-
-    private void WriteRenderable(IRenderable renderable)
-    {
-        lock (_gate)
-        {
-            _console.Write(renderable);
-        }
-    }
-
     private readonly IAnsiConsole _console;
+    private readonly List<string> _lines = [];
+    private RaftStatus? _latestStatus;
     private static readonly Lock _gate = new();
     private static readonly Regex _highlightToken = HighlightTokenRegex();
 

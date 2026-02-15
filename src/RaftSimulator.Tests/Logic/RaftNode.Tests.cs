@@ -79,7 +79,6 @@ public sealed class RaftNodeTests
             "SendHeartbeatToPeerAsync",
             peer,
             3,
-            1,
             CancellationToken.None);
 
         // Assert
