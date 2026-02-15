@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using FluentAssertions;
 
 using Moq;
@@ -49,6 +51,85 @@ public sealed class RaftNodeTests
         status.Role.Should().Be(RaftRole.Follower);
     }
 
+    [Fact(DisplayName = "Append entries response with higher term steps down")]
+    [Trait("Category", "Unit")]
+    public async Task AppendEntriesResponseWithHigherTermStepsDown()
+    {
+        // Arrange
+        var settings = CreateSettings();
+        var peer = settings.Peers[0];
+        var peerClient = new Mock<IRaftPeerClient>(MockBehavior.Strict);
+        var log = new Mock<IRaftLog>(MockBehavior.Loose);
+        var node = new RaftNode(settings, peerClient.Object, log.Object);
+
+        SetPrivateField(node, "_role", RaftRole.Leader);
+        SetPrivateField(node, "_currentTerm", 3);
+        SetPrivateField(node, "_leaderId", (int?)settings.NodeId);
+
+        peerClient
+            .Setup(client => client.AppendEntriesAsync(
+                peer,
+                It.IsAny<RaftAppendEntriesRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RaftAppendEntriesResponse(4, peer.Id, true));
+
+        // Act
+        await InvokePrivateAsync(
+            node,
+            "SendHeartbeatToPeerAsync",
+            peer,
+            3,
+            1,
+            CancellationToken.None);
+
+        // Assert
+        peerClient.Verify(client => client.AppendEntriesAsync(
+            peer,
+            It.IsAny<RaftAppendEntriesRequest>(),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        var status = node.GetStatus();
+        status.Term.Should().Be(new Term(4));
+        status.Role.Should().Be(RaftRole.Follower);
+        status.LeaderId.Should().BeNull();
+    }
+
+    [Fact(DisplayName = "StartElection logs unexpected peer errors")]
+    [Trait("Category", "Unit")]
+    public async Task StartElectionLogsUnexpectedPeerErrors()
+    {
+        // Arrange
+        var settings = CreateSettings();
+        var peerClient = new Mock<IRaftPeerClient>(MockBehavior.Strict);
+        var log = new Mock<IRaftLog>(MockBehavior.Loose);
+        var failureLogged = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        log.Setup(logger => logger.WriteNode(
+                It.IsAny<int>(),
+                It.Is<string>(message => message.Contains("failed"))))
+            .Callback<int, string>((_, message) => failureLogged.TrySetResult(message));
+
+        peerClient
+            .Setup(client => client.RequestVoteAsync(
+                It.IsAny<PeerInfo>(),
+                It.IsAny<RaftVoteRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        var node = new RaftNode(settings, peerClient.Object, log.Object);
+
+        // Act
+        await InvokePrivateAsync(node, "StartElectionAsync", 1, CancellationToken.None);
+
+        // Assert
+        var completed = await Task.WhenAny(failureLogged.Task, Task.Delay(TimeSpan.FromSeconds(1)));
+        completed.Should().BeSameAs(failureLogged.Task);
+        var message = await failureLogged.Task;
+        message.Should().Contain("InvalidOperationException");
+    }
+
     private static RaftNode CreateNode()
     {
         var settings = CreateSettings();
@@ -72,5 +153,27 @@ public sealed class RaftNodeTests
         };
 
         return RaftSettings.FromOptions(options);
+    }
+
+    private static Task InvokePrivateAsync(object target, string methodName, params object?[] args)
+    {
+        var method = target
+            .GetType()
+            .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+
+        method.Should().NotBeNull();
+        var task = (Task?)method!.Invoke(target, args);
+        task.Should().NotBeNull();
+        return task!;
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        var field = target
+            .GetType()
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+
+        field.Should().NotBeNull();
+        field!.SetValue(target, value);
     }
 }
