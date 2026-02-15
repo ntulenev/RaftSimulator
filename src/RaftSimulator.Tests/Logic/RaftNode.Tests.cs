@@ -26,7 +26,7 @@ public sealed class RaftNodeTests
 
         // Assert
         response.Granted.Should().BeFalse();
-        response.Term.Should().Be(2);
+        response.Term.Should().Be(new Term(2));
     }
 
     [Fact(DisplayName = "OnAppendEntries updates leader and term")]
@@ -44,8 +44,8 @@ public sealed class RaftNodeTests
 
         // Assert
         response.Success.Should().BeTrue();
-        status.Term.Should().Be(3);
-        status.LeaderId.Should().Be(5);
+        status.Term.Should().Be(new Term(3));
+        status.LeaderId.Should().Be(new LeaderId(5));
         status.Role.Should().Be(RaftRole.Follower);
     }
 
