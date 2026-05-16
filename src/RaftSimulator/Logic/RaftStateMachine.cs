@@ -37,13 +37,13 @@ internal sealed class RaftStateMachine
         TimeSpan heartbeatInterval)
     {
         State.Role = RaftRole.Follower;
-        State.CurrentTerm = 0;
+        State.CurrentTerm = new Term(0);
         State.VotedFor = null;
         State.LeaderId = null;
         State.VotesReceived = 0;
         State.LeaderSince = default;
         State.LastHeartbeatAckAt.Clear();
-        State.LastReportedTerm = -1;
+        State.LastReportedTerm = null;
         State.NextElectionDeadline = now + electionTimeout;
         State.NextHeartbeatAt = now + heartbeatInterval;
     }
@@ -65,14 +65,14 @@ internal sealed class RaftStateMachine
         RaftVoteResponse response;
         var events = new List<RaftEvent>(2);
 
-        if (request.Term.Value < State.CurrentTerm)
+        if (request.Term.Value < State.CurrentTerm.Value)
         {
             response = new RaftVoteResponse(State.CurrentTerm, Id, false);
             events.Add(new RequestVoteDeniedEvent(request.CandidateId.Value, request.Term.Value));
         }
         else
         {
-            if (request.Term.Value > State.CurrentTerm)
+            if (request.Term.Value > State.CurrentTerm.Value)
             {
                 events.Add(BecomeFollower(request.Term.Value, null, now, electionTimeout));
             }
@@ -81,14 +81,14 @@ internal sealed class RaftStateMachine
                 && (State.VotedFor is null || State.VotedFor == request.CandidateId);
             if (canVote)
             {
-                State.VotedFor = request.CandidateId.Value;
+                State.VotedFor = request.CandidateId;
                 State.NextElectionDeadline = now + electionTimeout;
             }
 
             response = new RaftVoteResponse(State.CurrentTerm, Id, canVote);
             events.Add(canVote
-                ? new RequestVoteGrantedEvent(request.CandidateId.Value, State.CurrentTerm)
-                : new RequestVoteDeniedEvent(request.CandidateId.Value, State.CurrentTerm));
+                ? new RequestVoteGrantedEvent(request.CandidateId.Value, State.CurrentTerm.Value)
+                : new RequestVoteDeniedEvent(request.CandidateId.Value, State.CurrentTerm.Value));
         }
 
         return new VoteDecision(response, events);
@@ -112,14 +112,14 @@ internal sealed class RaftStateMachine
         var events = new List<RaftEvent>(2);
         RaftStatus? statusSnapshot = null;
 
-        if (request.Term.Value < State.CurrentTerm)
+        if (request.Term.Value < State.CurrentTerm.Value)
         {
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, false);
             events.Add(new HeartbeatIgnoredEvent(request.LeaderId.Value, request.Term.Value));
         }
         else
         {
-            if (request.Term.Value > State.CurrentTerm || State.Role != RaftRole.Follower)
+            if (request.Term.Value > State.CurrentTerm.Value || State.Role != RaftRole.Follower)
             {
                 events.Add(BecomeFollower(
                     request.Term.Value,
@@ -128,11 +128,11 @@ internal sealed class RaftStateMachine
                     electionTimeout));
             }
 
-            State.LeaderId = request.LeaderId.Value;
+            State.LeaderId = request.LeaderId;
             State.NextElectionDeadline = now + electionTimeout;
 
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, true);
-            events.Add(new HeartbeatReceivedEvent(request.LeaderId.Value, State.CurrentTerm));
+            events.Add(new HeartbeatReceivedEvent(request.LeaderId.Value, State.CurrentTerm.Value));
 
             if (TryGetElectionStatusSnapshot(out var snapshot))
             {
@@ -160,21 +160,21 @@ internal sealed class RaftStateMachine
             State.NextHeartbeatAt = now + heartbeatInterval;
             return new TimeoutAction(
                 TimeoutActionType.Heartbeats,
-                State.CurrentTerm,
+                State.CurrentTerm.Value,
                 [new LeaderHeartbeatEvent()]);
         }
 
         State.Role = RaftRole.Candidate;
-        State.CurrentTerm++;
-        State.VotedFor = Id;
+        State.CurrentTerm = new Term(State.CurrentTerm.Value + 1);
+        State.VotedFor = new CandidateId(Id);
         State.VotesReceived = 1;
         State.LeaderId = null;
         State.NextElectionDeadline = now + electionTimeout;
 
         return new TimeoutAction(
             TimeoutActionType.Election,
-            State.CurrentTerm,
-            [new ElectionTimeoutEvent(State.CurrentTerm)]);
+            State.CurrentTerm.Value,
+            [new ElectionTimeoutEvent(State.CurrentTerm.Value)]);
     }
 
     /// <summary>
@@ -196,18 +196,18 @@ internal sealed class RaftStateMachine
         var term = response.Term.Value;
         RaftStatus? statusSnapshot = null;
 
-        if (response.Term.Value > State.CurrentTerm)
+        if (response.Term.Value > State.CurrentTerm.Value)
         {
             events.Add(new HigherTermDiscoveredEvent(response.Term.Value, response.FromId.Value));
             events.Add(BecomeFollower(response.Term.Value, null, now, electionTimeout));
         }
-        else if (State.Role != RaftRole.Candidate || response.Term.Value != State.CurrentTerm)
+        else if (State.Role != RaftRole.Candidate || response.Term.Value != State.CurrentTerm.Value)
         {
             return new VoteResponseDecision([], false, term, null);
         }
         else if (!response.Granted)
         {
-            events.Add(new VoteResponseDeniedEvent(response.FromId.Value, State.CurrentTerm));
+            events.Add(new VoteResponseDeniedEvent(response.FromId.Value, State.CurrentTerm.Value));
         }
         else
         {
@@ -220,14 +220,14 @@ internal sealed class RaftStateMachine
             if (State.VotesReceived >= _settings.Majority)
             {
                 State.Role = RaftRole.Leader;
-                State.LeaderId = Id;
+                State.LeaderId = new LeaderId(Id);
                 State.VotesReceived = 0;
                 State.NextHeartbeatAt = now;
                 State.LeaderSince = now;
                 State.LastHeartbeatAckAt.Clear();
-                events.Add(new BecameLeaderEvent(State.CurrentTerm));
+                events.Add(new BecameLeaderEvent(State.CurrentTerm.Value));
                 becameLeader = true;
-                term = State.CurrentTerm;
+                term = State.CurrentTerm.Value;
 
                 if (TryGetElectionStatusSnapshot(out var snapshot))
                 {
@@ -253,7 +253,7 @@ internal sealed class RaftStateMachine
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        if (response.Term.Value <= State.CurrentTerm)
+        if (response.Term.Value <= State.CurrentTerm.Value)
         {
             return new AppendEntriesResponseDecision([]);
         }
@@ -335,25 +335,27 @@ internal sealed class RaftStateMachine
         TimeSpan electionTimeout)
     {
         State.Role = RaftRole.Follower;
-        State.LeaderId = leaderId;
+        State.LeaderId = leaderId is null ? null : new LeaderId(leaderId.Value);
         State.VotesReceived = 0;
         State.LeaderSince = default;
         State.LastHeartbeatAckAt.Clear();
 
-        if (term > State.CurrentTerm)
+        if (term > State.CurrentTerm.Value)
         {
-            State.CurrentTerm = term;
+            State.CurrentTerm = new Term(term);
             State.VotedFor = null;
         }
 
         State.NextElectionDeadline = now + electionTimeout;
 
-        return new BecameFollowerEvent(State.CurrentTerm, leaderId);
+        return new BecameFollowerEvent(State.CurrentTerm.Value, leaderId);
     }
 
     private bool TryGetElectionStatusSnapshot(out RaftStatus snapshot)
     {
-        if (State.LeaderId is null || State.CurrentTerm <= State.LastReportedTerm)
+        if (State.LeaderId is null ||
+            (State.LastReportedTerm is not null &&
+             State.CurrentTerm.Value <= State.LastReportedTerm.Value.Value))
         {
             snapshot = default!;
             return false;

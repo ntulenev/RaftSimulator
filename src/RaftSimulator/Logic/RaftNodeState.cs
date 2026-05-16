@@ -22,17 +22,17 @@ internal sealed class RaftNodeState
     /// <summary>
     /// Gets or sets current term.
     /// </summary>
-    public int CurrentTerm { get; set; }
+    public Term CurrentTerm { get; set; }
 
     /// <summary>
     /// Gets or sets node voted for in the current term.
     /// </summary>
-    public int? VotedFor { get; set; }
+    public CandidateId? VotedFor { get; set; }
 
     /// <summary>
     /// Gets or sets known leader identifier.
     /// </summary>
-    public int? LeaderId { get; set; }
+    public LeaderId? LeaderId { get; set; }
 
     /// <summary>
     /// Gets or sets votes received in the current election.
@@ -57,7 +57,7 @@ internal sealed class RaftNodeState
     /// <summary>
     /// Gets or sets last term for which election status was reported.
     /// </summary>
-    public int LastReportedTerm { get; set; } = -1;
+    public Term? LastReportedTerm { get; set; }
 
     /// <summary>
     /// Gets last successful heartbeat acknowledgement time by peer identifier.
