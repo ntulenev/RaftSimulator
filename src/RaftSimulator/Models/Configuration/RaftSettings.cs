@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace RaftSimulator.Models.Configuration;
 
 /// <summary>
@@ -85,6 +87,20 @@ internal sealed class RaftSettings
     public static RaftSettings FromOptions(RaftOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        var validationResults = new List<ValidationResult>();
+        var validationContext = new ValidationContext(options);
+        if (!Validator.TryValidateObject(
+            options,
+            validationContext,
+            validationResults,
+            validateAllProperties: true))
+        {
+            var message = string.Join(
+                " ",
+                validationResults.Select(static result => result.ErrorMessage));
+            throw new InvalidOperationException(message);
+        }
 
         if (options.NodeId < 1)
         {

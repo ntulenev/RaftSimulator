@@ -1,7 +1,5 @@
 using System.Text;
 
-using Microsoft.Extensions.Options;
-
 using RaftSimulator.Abstractions;
 using RaftSimulator.API;
 using RaftSimulator.Logic;
@@ -17,18 +15,13 @@ builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnCh
 builder.Configuration.AddEnvironmentVariables(prefix: "RAFT_");
 builder.Configuration.AddCommandLine(args);
 
-builder.Services
-    .AddOptions<RaftOptions>()
-    .Bind(builder.Configuration.GetSection("Raft"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+var settings = RaftSettings.FromOptions(
+    builder.Configuration.GetSection("Raft").Get<RaftOptions>() ?? new RaftOptions());
+builder.WebHost.UseUrls($"http://localhost:{settings.Port}");
 
-builder.Services.AddSingleton(sp =>
-{
-    var options = sp.GetRequiredService<IOptions<RaftOptions>>().Value;
-    return RaftSettings.FromOptions(options);
-});
-
+builder.Services.AddSingleton(settings);
+builder.Services.AddSingleton<IRaftClock, SystemRaftClock>();
+builder.Services.AddSingleton<IRaftRandom, CryptoRaftRandom>();
 builder.Services.AddSingleton<IRaftLog, SpectreRaftLog>();
 builder.Services.AddSingleton<IRaftNode, RaftNode>();
 builder.Services.AddHostedService<RaftHostedService>();
@@ -39,10 +32,6 @@ builder.Services.AddHttpClient<IRaftPeerClient, RaftPeerClient>((sp, client) =>
     var timeoutMs = Math.Min(settings.HeartbeatInterval.TotalMilliseconds, maxTimeoutMs);
     client.Timeout = TimeSpan.FromMilliseconds(Math.Max(200, timeoutMs));
 });
-
-var settings = RaftSettings.FromOptions(
-    builder.Configuration.GetSection("Raft").Get<RaftOptions>() ?? new RaftOptions());
-builder.WebHost.UseUrls($"http://localhost:{settings.Port}");
 
 var app = builder.Build();
 

@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.Threading.Channels;
 
 using RaftSimulator.Abstractions;
@@ -9,7 +7,7 @@ using RaftSimulator.Models.Domain;
 namespace RaftSimulator.Logic;
 
 /// <summary>
-/// Raft node state machine.
+/// Raft node runtime loop and side-effect orchestration.
 /// </summary>
 internal sealed class RaftNode : IRaftNode
 {
@@ -19,15 +17,27 @@ internal sealed class RaftNode : IRaftNode
     /// <param name="settings">Raft settings.</param>
     /// <param name="peerClient">Peer client.</param>
     /// <param name="log">Log sink.</param>
-    public RaftNode(RaftSettings settings, IRaftPeerClient peerClient, IRaftLog log)
+    /// <param name="clock">Clock.</param>
+    /// <param name="random">Random source.</param>
+    public RaftNode(
+        RaftSettings settings,
+        IRaftPeerClient peerClient,
+        IRaftLog log,
+        IRaftClock clock,
+        IRaftRandom random)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(peerClient);
         ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(random);
 
         _settings = settings;
         _peerClient = peerClient;
         _log = log;
+        _clock = clock;
+        _random = random;
+        _stateMachine = new RaftStateMachine(settings);
         _scheduleSignal = Channel.CreateUnbounded<bool>(
             new UnboundedChannelOptions
             {
@@ -88,42 +98,19 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        RaftVoteResponse response;
-        string logLine;
+        VoteDecision decision;
 
         lock (_gate)
         {
-            if (request.Term < _currentTerm)
-            {
-                response = new RaftVoteResponse(_currentTerm, Id, false);
-                logLine = $"Denied vote to Node {request.CandidateId:00} (term {request.Term}).";
-            }
-            else
-            {
-                logLine = request.Term > _currentTerm
-                    ? BecomeFollowerUnsafe(request.Term, null)
-                    : string.Empty;
-
-                var canVote = _role != RaftRole.Leader
-                    && (_votedFor is null || _votedFor == request.CandidateId);
-                if (canVote)
-                {
-                    _votedFor = request.CandidateId;
-                    _nextElectionDeadline = GetNextElectionDeadlineUnsafe();
-                    SignalScheduleChangeUnsafe();
-                }
-
-                response = new RaftVoteResponse(_currentTerm, Id, canVote);
-                logLine = string.IsNullOrWhiteSpace(logLine)
-                    ? $"{(canVote ? "Granted" : "Denied")} vote to Node {request.CandidateId:00} " +
-                      $"(term {_currentTerm})."
-                    : logLine + $" {(canVote ? "Granted" : "Denied")} vote to Node " +
-                      $"{request.CandidateId:00} (term {_currentTerm}).";
-            }
+            decision = _stateMachine.HandleRequestVote(
+                request,
+                _clock.UtcNow,
+                GetRandomElectionTimeout());
+            SignalScheduleChangeUnsafe();
         }
 
-        _log.WriteNode(Id, logLine);
-        return Task.FromResult(response);
+        _log.WriteNode(Id, decision.LogLine);
+        return Task.FromResult(decision.Response);
     }
 
     /// <inheritdoc />
@@ -134,45 +121,24 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        RaftAppendEntriesResponse response;
-        string logLine;
-        RaftStatus? statusSnapshot = null;
+        AppendEntriesDecision decision;
 
         lock (_gate)
         {
-            if (request.Term < _currentTerm)
-            {
-                response = new RaftAppendEntriesResponse(_currentTerm, Id, false);
-                logLine = $"Ignored heartbeat from Node {request.LeaderId:00} (term {request.Term}).";
-            }
-            else
-            {
-                logLine = request.Term > _currentTerm || _role != RaftRole.Follower
-                    ? BecomeFollowerUnsafe(request.Term, request.LeaderId)
-                    : string.Empty;
-
-                _leaderId = request.LeaderId;
-                _nextElectionDeadline = GetNextElectionDeadlineUnsafe();
-                SignalScheduleChangeUnsafe();
-
-                response = new RaftAppendEntriesResponse(_currentTerm, Id, true);
-                logLine = string.IsNullOrWhiteSpace(logLine)
-                    ? $"Heartbeat from Node {request.LeaderId:00} (term {_currentTerm})."
-                    : logLine + $" Heartbeat from Node {request.LeaderId:00} (term {_currentTerm}).";
-
-                if (TryGetElectionStatusSnapshotUnsafe(out var snapshot))
-                {
-                    statusSnapshot = snapshot;
-                }
-            }
+            decision = _stateMachine.HandleAppendEntries(
+                request,
+                _clock.UtcNow,
+                GetRandomElectionTimeout());
+            SignalScheduleChangeUnsafe();
         }
 
-        _log.WriteNode(Id, logLine);
-        if (statusSnapshot is not null)
+        _log.WriteNode(Id, decision.LogLine);
+        if (decision.StatusSnapshot is not null)
         {
-            _log.WriteNodeStatus(statusSnapshot);
+            _log.WriteNodeStatus(decision.StatusSnapshot);
         }
-        return Task.FromResult(response);
+
+        return Task.FromResult(decision.Response);
     }
 
     /// <inheritdoc />
@@ -180,11 +146,7 @@ internal sealed class RaftNode : IRaftNode
     {
         lock (_gate)
         {
-            return new RaftStatus(
-                Id,
-                _currentTerm,
-                _role,
-                _leaderId);
+            return _stateMachine.GetStatus();
         }
     }
 
@@ -192,16 +154,11 @@ internal sealed class RaftNode : IRaftNode
     {
         lock (_gate)
         {
-            _role = RaftRole.Follower;
-            _currentTerm = 0;
-            _votedFor = null;
-            _leaderId = null;
-            _votesReceived = 0;
-            _leaderSince = default;
-            _lastHeartbeatAckAt.Clear();
-            _lastReportedTerm = -1;
-            _nextElectionDeadline = GetNextElectionDeadlineUnsafe();
-            _nextHeartbeatAt = DateTimeOffset.UtcNow + _settings.HeartbeatInterval;
+            _stateMachine.Initialize(
+                _clock.UtcNow,
+                GetRandomElectionTimeout(),
+                _settings.HeartbeatInterval);
+            SignalScheduleChangeUnsafe();
         }
     }
 
@@ -228,42 +185,19 @@ internal sealed class RaftNode : IRaftNode
     {
         lock (_gate)
         {
-            if (_role == RaftRole.Leader)
-            {
-                _nextHeartbeatAt = DateTimeOffset.UtcNow + _settings.HeartbeatInterval;
-                SignalScheduleChangeUnsafe();
-                return new TimeoutAction(
-                    TimeoutActionType.Heartbeats,
-                    _currentTerm,
-                    "Leader heartbeat.");
-            }
-
-            _role = RaftRole.Candidate;
-            _currentTerm++;
-            _votedFor = Id;
-            _votesReceived = 1;
-            _leaderId = null;
-            _nextElectionDeadline = GetNextElectionDeadlineUnsafe();
+            var action = _stateMachine.PrepareTimeoutAction(
+                _clock.UtcNow,
+                GetRandomElectionTimeout(),
+                _settings.HeartbeatInterval);
             SignalScheduleChangeUnsafe();
-
-            return new TimeoutAction(
-                TimeoutActionType.Election,
-                _currentTerm,
-                $"Election timeout. Term {_currentTerm}, becoming candidate.");
+            return action;
         }
     }
 
-    private Task StartElectionAsync(int term, CancellationToken cancellationToken)
-    {
-        foreach (var peer in _settings.Peers)
-        {
-            ObserveTask(
-                RequestVoteFromPeerAsync(peer, term, cancellationToken),
-                $"RequestVote -> Node {peer.Id:00} (term {term})");
-        }
-
-        return Task.CompletedTask;
-    }
+    private Task StartElectionAsync(int term, CancellationToken cancellationToken) =>
+        BroadcastToPeersAsync(
+            peer => RequestVoteFromPeerAsync(peer, term, cancellationToken),
+            $"RequestVote (term {term})");
 
     private async Task RequestVoteFromPeerAsync(
         PeerInfo peer,
@@ -305,82 +239,42 @@ internal sealed class RaftNode : IRaftNode
         RaftVoteResponse response,
         CancellationToken cancellationToken)
     {
-        var logs = new List<string>(2);
-        var becameLeader = false;
-        var term = response.Term;
-        RaftStatus? statusSnapshot = null;
+        VoteResponseDecision decision;
 
         lock (_gate)
         {
-            if (response.Term > _currentTerm)
+            decision = _stateMachine.HandleVoteResponse(
+                response,
+                _clock.UtcNow,
+                GetRandomElectionTimeout());
+            if (decision.LogLines.Count > 0 || decision.BecameLeader)
             {
-                logs.Add(
-                    $"Discovered higher term {response.Term} from Node {response.FromId:00}.");
-                logs.Add(BecomeFollowerUnsafe(response.Term, null));
-            }
-            else if (_role != RaftRole.Candidate || response.Term != _currentTerm)
-            {
-                return;
-            }
-            else if (!response.Granted)
-            {
-                logs.Add(
-                    $"Vote denied by Node {response.FromId:00} (term {_currentTerm}).");
-            }
-            else
-            {
-                _votesReceived++;
-                logs.Add(
-                    $"Vote granted by Node {response.FromId:00}. Total={_votesReceived}/{_settings.Majority}.");
-
-                if (_votesReceived >= _settings.Majority)
-                {
-                    var now = DateTimeOffset.UtcNow;
-                    _role = RaftRole.Leader;
-                    _leaderId = Id;
-                    _votesReceived = 0;
-                    _nextHeartbeatAt = now;
-                    _leaderSince = now;
-                    _lastHeartbeatAckAt.Clear();
-                    SignalScheduleChangeUnsafe();
-                    logs.Add($"Became leader for term {_currentTerm}.");
-                    becameLeader = true;
-                    term = _currentTerm;
-
-                    if (TryGetElectionStatusSnapshotUnsafe(out var snapshot))
-                    {
-                        statusSnapshot = snapshot;
-                    }
-                }
+                SignalScheduleChangeUnsafe();
             }
         }
 
-        foreach (var logLine in logs)
+        foreach (var logLine in decision.LogLines)
         {
             _log.WriteNode(Id, logLine);
         }
 
-        if (statusSnapshot is not null)
+        if (decision.StatusSnapshot is not null)
         {
-            _log.WriteNodeStatus(statusSnapshot);
+            _log.WriteNodeStatus(decision.StatusSnapshot);
         }
 
-        if (becameLeader)
+        if (decision.BecameLeader)
         {
-            await SendHeartbeatsAsync(term, cancellationToken).ConfigureAwait(false);
+            await SendHeartbeatsAsync(decision.Term, cancellationToken).ConfigureAwait(false);
         }
     }
 
     private Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
     {
         ReportQuorum();
-        foreach (var peer in _settings.Peers)
-        {
-            ObserveTask(
-                SendHeartbeatToPeerAsync(peer, term, cancellationToken),
-                $"AppendEntries -> Node {peer.Id:00} (term {term})");
-        }
-        return Task.CompletedTask;
+        return BroadcastToPeersAsync(
+            peer => SendHeartbeatToPeerAsync(peer, term, cancellationToken),
+            $"AppendEntries (term {term})");
     }
 
     private async Task SendHeartbeatToPeerAsync(
@@ -420,67 +314,45 @@ internal sealed class RaftNode : IRaftNode
         }
     }
 
-    private string BecomeFollowerUnsafe(int term, int? leaderId)
+    private async Task BroadcastToPeersAsync(
+        Func<PeerInfo, Task> sendAsync,
+        string context)
     {
-        _role = RaftRole.Follower;
-        _leaderId = leaderId;
-        _votesReceived = 0;
-        _leaderSince = default;
-        _lastHeartbeatAckAt.Clear();
+        var tasks = _settings
+            .Peers
+            .Select(peer => ObservePeerTaskAsync(peer, sendAsync, context));
 
-        if (term > _currentTerm)
-        {
-            _currentTerm = term;
-            _votedFor = null;
-        }
-
-        _nextElectionDeadline = GetNextElectionDeadlineUnsafe();
-        SignalScheduleChangeUnsafe();
-
-        var leaderText = leaderId is null ? "unknown" : $"Node {leaderId:00}";
-        return $"Became follower for term {_currentTerm} (leader {leaderText}).";
+        await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
-    private bool TryGetElectionStatusSnapshotUnsafe(out RaftStatus snapshot)
+    private async Task ObservePeerTaskAsync(
+        PeerInfo peer,
+        Func<PeerInfo, Task> sendAsync,
+        string context)
     {
-        if (_leaderId is null || _currentTerm <= _lastReportedTerm)
+        try
         {
-            snapshot = default!;
-            return false;
+            await sendAsync(peer).ConfigureAwait(false);
         }
-
-        _lastReportedTerm = _currentTerm;
-        snapshot = new RaftStatus(Id, _currentTerm, _role, _leaderId);
-        return true;
+        catch (InvalidOperationException exception)
+        {
+            _log.WriteNode(
+                Id,
+                $"{context} -> Node {peer.Id:00} failed: " +
+                $"{exception.GetType().Name}: {exception.Message}");
+        }
     }
 
     private TimeSpan GetNextDelay()
     {
         lock (_gate)
         {
-            var now = DateTimeOffset.UtcNow;
-            var deadline = _role == RaftRole.Leader
-                ? _nextHeartbeatAt
-                : _nextElectionDeadline;
-            return deadline - now;
+            return _stateMachine.GetNextDelay(_clock.UtcNow);
         }
     }
 
-    private DateTimeOffset GetNextElectionDeadlineUnsafe() =>
-        DateTimeOffset.UtcNow + GetRandomElectionTimeoutUnsafe();
-
-    private TimeSpan GetRandomElectionTimeoutUnsafe()
-    {
-        if (_settings.MinElectionTimeout == _settings.MaxElectionTimeout)
-        {
-            return _settings.MinElectionTimeout;
-        }
-
-        var window = _settings.MaxElectionTimeout - _settings.MinElectionTimeout;
-        var offset = TimeSpan.FromMilliseconds(
-            window.TotalMilliseconds * NextRandomDouble());
-        return _settings.MinElectionTimeout + offset;
-    }
+    private TimeSpan GetRandomElectionTimeout() =>
+        GetRandomDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
 
     private Task DelayNetworkAsync(CancellationToken cancellationToken)
     {
@@ -490,23 +362,19 @@ internal sealed class RaftNode : IRaftNode
             : Task.CompletedTask;
     }
 
-    private TimeSpan GetRandomNetworkDelay()
+    private TimeSpan GetRandomNetworkDelay() =>
+        GetRandomDelay(_settings.MinNetworkDelay, _settings.MaxNetworkDelay);
+
+    private TimeSpan GetRandomDelay(TimeSpan min, TimeSpan max)
     {
-        if (_settings.MinNetworkDelay == _settings.MaxNetworkDelay)
+        if (min == max)
         {
-            return _settings.MinNetworkDelay;
+            return min;
         }
 
-        var window = _settings.MaxNetworkDelay - _settings.MinNetworkDelay;
-        var offset = TimeSpan.FromMilliseconds(
-            window.TotalMilliseconds * NextRandomDouble());
-        return _settings.MinNetworkDelay + offset;
-    }
-
-    private static double NextRandomDouble()
-    {
-        var value = RandomNumberGenerator.GetInt32(int.MaxValue);
-        return value / (double)int.MaxValue;
+        var window = max - min;
+        var offset = TimeSpan.FromMilliseconds(window.TotalMilliseconds * _random.NextDouble());
+        return min + offset;
     }
 
     private void DrainScheduleSignals()
@@ -519,52 +387,26 @@ internal sealed class RaftNode : IRaftNode
     private void SignalScheduleChangeUnsafe() =>
         _ = _scheduleSignal.Writer.TryWrite(true);
 
-    private void RegisterHeartbeatAck(int peerId) =>
-        _lastHeartbeatAckAt[peerId] = DateTimeOffset.UtcNow;
-
-    private void ReportQuorum()
-    {
-        var leaderSince = GetLeaderSince();
-        if (leaderSince == default)
-        {
-            return;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var window = GetQuorumWindow();
-        if (now - leaderSince < window)
-        {
-            return;
-        }
-
-        var cutoff = now - window;
-        var reachablePeers = 0;
-
-        foreach (var peer in _settings.Peers)
-        {
-            if (_lastHeartbeatAckAt.TryGetValue(peer.Id, out var ackAt) && ackAt >= cutoff)
-            {
-                reachablePeers++;
-            }
-        }
-
-        var reachable = reachablePeers + 1;
-        var needed = _settings.Majority;
-        var total = _settings.NodeCount;
-
-        if (reachable >= needed)
-        {
-            return;
-        }
-
-        _log.WriteNode(Id, $"Cluster out of quorum: {reachable}/{total} (need {needed}).");
-    }
-
-    private DateTimeOffset GetLeaderSince()
+    private void RegisterHeartbeatAck(int peerId)
     {
         lock (_gate)
         {
-            return _leaderSince;
+            _stateMachine.RegisterHeartbeatAck(peerId, _clock.UtcNow);
+        }
+    }
+
+    private void ReportQuorum()
+    {
+        string? warning;
+
+        lock (_gate)
+        {
+            warning = _stateMachine.BuildQuorumWarning(_clock.UtcNow, GetQuorumWindow());
+        }
+
+        if (warning is not null)
+        {
+            _log.WriteNode(Id, warning);
         }
     }
 
@@ -573,70 +415,32 @@ internal sealed class RaftNode : IRaftNode
 
     private void HandleAppendEntriesResponse(RaftAppendEntriesResponse response)
     {
-        List<string> logs;
+        AppendEntriesResponseDecision decision;
 
         lock (_gate)
         {
-            if (response.Term <= _currentTerm)
+            decision = _stateMachine.HandleAppendEntriesResponse(
+                response,
+                _clock.UtcNow,
+                GetRandomElectionTimeout());
+            if (decision.LogLines.Count > 0)
             {
-                return;
+                SignalScheduleChangeUnsafe();
             }
-
-            logs =
-            [
-                $"Discovered higher term {response.Term} from Node {response.FromId:00}.",
-                BecomeFollowerUnsafe(response.Term, null)
-            ];
         }
 
-        foreach (var logLine in logs)
+        foreach (var logLine in decision.LogLines)
         {
             _log.WriteNode(Id, logLine);
         }
     }
 
-    private void ObserveTask(Task task, string context)
-    {
-        _ = task.ContinueWith(
-            t =>
-            {
-                var exception = t.Exception?.GetBaseException();
-                if (exception is null)
-                {
-                    return;
-                }
-
-                _log.WriteNode(
-                    Id,
-                    $"{context} failed: {exception.GetType().Name}: {exception.Message}");
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-    }
-
     private readonly RaftSettings _settings;
     private readonly IRaftPeerClient _peerClient;
     private readonly IRaftLog _log;
+    private readonly IRaftClock _clock;
+    private readonly IRaftRandom _random;
+    private readonly RaftStateMachine _stateMachine;
     private readonly Channel<bool> _scheduleSignal;
     private readonly Lock _gate = new();
-
-    private RaftRole _role;
-    private int _currentTerm;
-    private int? _votedFor;
-    private int? _leaderId;
-    private int _votesReceived;
-    private DateTimeOffset _leaderSince;
-    private DateTimeOffset _nextElectionDeadline;
-    private DateTimeOffset _nextHeartbeatAt;
-    private int _lastReportedTerm;
-    private readonly ConcurrentDictionary<int, DateTimeOffset> _lastHeartbeatAckAt = new();
-
-    private enum TimeoutActionType
-    {
-        Election,
-        Heartbeats
-    }
-
-    private sealed record TimeoutAction(TimeoutActionType Type, int Term, string LogLine);
 }

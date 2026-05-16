@@ -98,6 +98,38 @@ public sealed class RaftApiIntegrationTests
         payload!.Should().Be(new RaftStatusDto(1, 4, "Leader", 1));
     }
 
+    [Fact(DisplayName = "RequestVote endpoint rejects invalid request")]
+    [Trait("Category", "Integration")]
+    public async Task RequestVoteEndpointRejectsInvalidRequest()
+    {
+        // Arrange
+        await using var factory = new RaftApiFactory(new TestRaftNode());
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client
+            .PostAsJsonAsync("/raft/request-vote", new RaftVoteRequestDto(0, 9));
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact(DisplayName = "AppendEntries endpoint rejects invalid request")]
+    [Trait("Category", "Integration")]
+    public async Task AppendEntriesEndpointRejectsInvalidRequest()
+    {
+        // Arrange
+        await using var factory = new RaftApiFactory(new TestRaftNode());
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client
+            .PostAsJsonAsync("/raft/append-entries", new RaftAppendEntriesRequestDto(3, 0));
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     private sealed class RaftApiFactory(TestRaftNode node) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
