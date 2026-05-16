@@ -15,6 +15,7 @@ namespace RaftSimulator.Presentation;
 internal sealed partial class SpectreRaftLog : IRaftLog
 {
     private const int MAX_LOG_LINES = 200;
+    private static readonly TimeSpan _minRenderInterval = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SpectreRaftLog"/> class.
@@ -45,7 +46,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
             formattedMessage = $"[bold red]{formattedMessage}[/]";
         }
         AppendLine($"[grey]{time}[/] [bold deepskyblue1][[Node {nodeId:00}]][/] {formattedMessage}");
-        RenderSnapshot();
+        RenderSnapshot(force: false);
     }
 
     /// <inheritdoc />
@@ -56,7 +57,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
         var time = DateTimeOffset.Now.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
         var safeMessage = Markup.Escape(message);
         AppendLine($"[grey]{time}[/] [bold yellow][[System]][/] {safeMessage}");
-        RenderSnapshot();
+        RenderSnapshot(force: false);
     }
 
     /// <inheritdoc />
@@ -69,7 +70,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
             _latestStatus = status;
         }
 
-        RenderSnapshot();
+        RenderSnapshot(force: true);
     }
 
     private void AppendLine(string markup)
@@ -84,7 +85,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
         }
     }
 
-    private void RenderSnapshot()
+    private void RenderSnapshot(bool force)
     {
         Layout layout;
         Panel statusPanel;
@@ -92,6 +93,15 @@ internal sealed partial class SpectreRaftLog : IRaftLog
 
         lock (_gate)
         {
+            var now = DateTimeOffset.UtcNow;
+            if (!force &&
+                _lastRenderAt != default &&
+                now - _lastRenderAt < _minRenderInterval)
+            {
+                return;
+            }
+
+            _lastRenderAt = now;
             statusPanel = BuildStatusPanel();
             var maxLines = GetLogLineLimit();
             logPanel = BuildLogPanel(maxLines);
@@ -216,6 +226,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
     private readonly IAnsiConsole _console;
     private readonly List<string> _lines = [];
     private RaftStatus? _latestStatus;
+    private DateTimeOffset _lastRenderAt;
     private static readonly Lock _gate = new();
     private static readonly Regex _highlightToken = HighlightTokenRegex();
 
