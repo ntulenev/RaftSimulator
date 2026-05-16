@@ -32,6 +32,8 @@ internal static class RaftApplicationBuilderExtensions
         _ = builder.Services.AddSingleton<IRaftLog, SpectreRaftLog>();
         _ = builder.Services.AddSingleton<IRaftEventLog, RaftEventLog>();
         _ = builder.Services.AddSingleton<IRaftPeerBroadcaster, RaftPeerBroadcaster>();
+        _ = builder.Services.AddSingleton<IRaftElectionRunner, RaftElectionRunner>();
+        _ = builder.Services.AddSingleton<IRaftHeartbeatRunner, RaftHeartbeatRunner>();
         _ = builder.Services.AddSingleton<IRaftNode, RaftNode>();
         _ = builder.Services.AddHostedService<RaftHostedService>();
         _ = builder.Services.AddHttpClient<IRaftPeerClient, RaftPeerClient>((sp, client) =>

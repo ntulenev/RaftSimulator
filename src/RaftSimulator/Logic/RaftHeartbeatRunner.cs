@@ -6,7 +6,7 @@ namespace RaftSimulator.Logic;
 /// <summary>
 /// Runs append-entries heartbeat RPC orchestration for a raft node.
 /// </summary>
-internal sealed class RaftHeartbeatRunner
+internal sealed class RaftHeartbeatRunner : IRaftHeartbeatRunner
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RaftHeartbeatRunner"/> class.

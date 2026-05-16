@@ -5,7 +5,6 @@ using RaftSimulator.Logic;
 using RaftSimulator.Logic.Events;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
-using RaftSimulator.Transport;
 
 namespace RaftSimulator.Tests.Logic;
 
@@ -19,25 +18,26 @@ public sealed class RaftNodeRuntimeTests
         var settings = CreateSettings();
         var clock = new TestClock();
         var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
-        var broadcaster = new SpyBroadcaster();
+        var electionRunner = new SpyElectionRunner();
         var log = new TestRaftLog();
         var eventLog = new TestRaftEventLog();
         var node = new RaftNode(
             settings,
-            broadcaster,
             log,
             eventLog,
             clock,
             new FixedDelayProvider(),
-            scheduler);
+            scheduler,
+            electionRunner,
+            new SpyHeartbeatRunner());
 
         // Act
         await node.RunAsync(CancellationToken.None);
 
         // Assert
-        broadcaster.RequestVoteCalls.Should().Be(1);
-        broadcaster.LastVoteTerm.Should().Be(1);
-        broadcaster.LastCandidateId.Should().Be(1);
+        electionRunner.StartElectionCalls.Should().Be(1);
+        electionRunner.LastVoteTerm.Should().Be(1);
+        electionRunner.LastCandidateId.Should().Be(1);
         eventLog.Events.Should().ContainSingle(item => item.Event is ElectionTimeoutEvent);
         log.Messages.Should().Contain("Started as follower.");
         log.Messages.Should().Contain("Stopped.");
@@ -51,31 +51,31 @@ public sealed class RaftNodeRuntimeTests
         var settings = CreateSettings();
         var clock = new TestClock();
         var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
-        var broadcaster = new SpyBroadcaster
+        var electionRunner = new SpyElectionRunner
         {
             VoteResults =
             [
-                PeerRpcResult<RaftVoteResponse>.Success(
-                    settings.Peers[0],
-                    new RaftVoteResponse(1, settings.Peers[0].Id, true))
+                new RaftVoteResponse(1, settings.Peers[0].Id, true)
             ]
         };
+        var heartbeatRunner = new SpyHeartbeatRunner();
         var node = new RaftNode(
             settings,
-            broadcaster,
             new TestRaftLog(),
             new TestRaftEventLog(),
             clock,
             new FixedDelayProvider(),
-            scheduler);
+            scheduler,
+            electionRunner,
+            heartbeatRunner);
 
         // Act
         await node.RunAsync(CancellationToken.None);
 
         // Assert
-        broadcaster.SendHeartbeatCalls.Should().Be(1);
-        broadcaster.LastHeartbeatTerm.Should().Be(1);
-        broadcaster.LastLeaderId.Should().Be(1);
+        heartbeatRunner.SendHeartbeatCalls.Should().Be(1);
+        heartbeatRunner.LastHeartbeatTerm.Should().Be(1);
+        heartbeatRunner.LastLeaderId.Should().Be(1);
     }
 
     private static RaftSettings CreateSettings()
@@ -136,46 +136,62 @@ public sealed class RaftNodeRuntimeTests
         public TimeSpan GetDelay(TimeSpan min, TimeSpan max) => min;
     }
 
-    private sealed class SpyBroadcaster : IRaftPeerBroadcaster
+    private sealed class SpyElectionRunner : IRaftElectionRunner
     {
-        public IReadOnlyList<PeerRpcResult<RaftVoteResponse>> VoteResults { get; init; } = [];
+        public IReadOnlyList<RaftVoteResponse> VoteResults { get; init; } = [];
 
-        public int RequestVoteCalls { get; private set; }
-
-        public int SendHeartbeatCalls { get; private set; }
+        public int StartElectionCalls { get; private set; }
 
         public int LastVoteTerm { get; private set; }
 
         public int LastCandidateId { get; private set; }
 
+        public async Task StartElectionAsync(
+            int term,
+            int candidateId,
+            Func<RaftVoteResponse, CancellationToken, Task> handleVoteResponseAsync,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(handleVoteResponseAsync);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            StartElectionCalls++;
+            LastVoteTerm = term;
+            LastCandidateId = candidateId;
+
+            foreach (var response in VoteResults)
+            {
+                await handleVoteResponseAsync(response, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private sealed class SpyHeartbeatRunner : IRaftHeartbeatRunner
+    {
+        public int SendHeartbeatCalls { get; private set; }
+
         public int LastHeartbeatTerm { get; private set; }
 
         public int LastLeaderId { get; private set; }
 
-        public Task<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>> RequestVotesAsync(
-            int term,
-            int candidateId,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            RequestVoteCalls++;
-            LastVoteTerm = term;
-            LastCandidateId = candidateId;
-            return Task.FromResult(VoteResults);
-        }
-
-        public Task<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>> SendHeartbeatsAsync(
+        public Task SendHeartbeatsAsync(
             int term,
             int leaderId,
+            Action reportQuorum,
+            Action<RaftAppendEntriesResponse> handleAppendEntriesResponse,
+            Action<int> registerHeartbeatAck,
             CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(reportQuorum);
+            ArgumentNullException.ThrowIfNull(handleAppendEntriesResponse);
+            ArgumentNullException.ThrowIfNull(registerHeartbeatAck);
             cancellationToken.ThrowIfCancellationRequested();
 
             SendHeartbeatCalls++;
             LastHeartbeatTerm = term;
             LastLeaderId = leaderId;
-            return Task.FromResult<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>>([]);
+            reportQuorum();
+            return Task.CompletedTask;
         }
     }
 

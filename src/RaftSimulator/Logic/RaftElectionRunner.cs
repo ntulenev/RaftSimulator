@@ -6,7 +6,7 @@ namespace RaftSimulator.Logic;
 /// <summary>
 /// Runs request-vote RPC orchestration for a raft node.
 /// </summary>
-internal sealed class RaftElectionRunner
+internal sealed class RaftElectionRunner : IRaftElectionRunner
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RaftElectionRunner"/> class.

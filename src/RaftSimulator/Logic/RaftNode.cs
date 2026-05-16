@@ -14,28 +14,31 @@ internal sealed class RaftNode : IRaftNode
     /// Initializes a new instance of the <see cref="RaftNode"/> class.
     /// </summary>
     /// <param name="settings">Raft settings.</param>
-    /// <param name="peerBroadcaster">Peer broadcaster.</param>
     /// <param name="log">Log sink.</param>
     /// <param name="eventLog">Event log sink.</param>
     /// <param name="clock">Clock.</param>
     /// <param name="delayProvider">Delay provider.</param>
     /// <param name="scheduler">Runtime scheduler.</param>
+    /// <param name="electionRunner">Election runner.</param>
+    /// <param name="heartbeatRunner">Heartbeat runner.</param>
     public RaftNode(
         RaftSettings settings,
-        IRaftPeerBroadcaster peerBroadcaster,
         IRaftLog log,
         IRaftEventLog eventLog,
         IRaftClock clock,
         IRaftDelayProvider delayProvider,
-        IRaftScheduler scheduler)
+        IRaftScheduler scheduler,
+        IRaftElectionRunner electionRunner,
+        IRaftHeartbeatRunner heartbeatRunner)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(peerBroadcaster);
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(eventLog);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(delayProvider);
         ArgumentNullException.ThrowIfNull(scheduler);
+        ArgumentNullException.ThrowIfNull(electionRunner);
+        ArgumentNullException.ThrowIfNull(heartbeatRunner);
 
         _settings = settings;
         _log = log;
@@ -43,9 +46,9 @@ internal sealed class RaftNode : IRaftNode
         _clock = clock;
         _delayProvider = delayProvider;
         _scheduler = scheduler;
+        _electionRunner = electionRunner;
+        _heartbeatRunner = heartbeatRunner;
         _stateMachine = new RaftStateMachine(settings);
-        _electionRunner = new RaftElectionRunner(peerBroadcaster, log);
-        _heartbeatRunner = new RaftHeartbeatRunner(peerBroadcaster, log);
     }
 
     /// <inheritdoc />
@@ -309,7 +312,7 @@ internal sealed class RaftNode : IRaftNode
     private readonly IRaftDelayProvider _delayProvider;
     private readonly IRaftScheduler _scheduler;
     private readonly RaftStateMachine _stateMachine;
-    private readonly RaftElectionRunner _electionRunner;
-    private readonly RaftHeartbeatRunner _heartbeatRunner;
+    private readonly IRaftElectionRunner _electionRunner;
+    private readonly IRaftHeartbeatRunner _heartbeatRunner;
     private readonly Lock _gate = new();
 }
