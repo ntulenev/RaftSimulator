@@ -18,7 +18,9 @@ internal static class RaftEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        _ = app.MapPost("/raft/request-vote", async (
+        var group = app.MapGroup("/raft");
+
+        _ = group.MapPost("/request-vote", async (
                     RaftVoteRequestDto request,
                     IRaftNode node,
                     CancellationToken cancellationToken) =>
@@ -31,7 +33,7 @@ internal static class RaftEndpoints
             .AddEndpointFilter<RequestVoteValidationFilter>()
             .WithName("RaftRequestVote");
 
-        _ = app.MapPost("/raft/append-entries", async (
+        _ = group.MapPost("/append-entries", async (
                     RaftAppendEntriesRequestDto request,
                     IRaftNode node,
                     CancellationToken cancellationToken) =>
@@ -44,7 +46,7 @@ internal static class RaftEndpoints
             .AddEndpointFilter<AppendEntriesValidationFilter>()
             .WithName("RaftAppendEntries");
 
-        _ = app.MapGet("/raft/status", (IRaftNode node) =>
+        _ = group.MapGet("/status", (IRaftNode node) =>
                 Results.Ok(RaftDtoMapper.ToDto(node.GetStatus())))
             .WithName("RaftStatus");
 
