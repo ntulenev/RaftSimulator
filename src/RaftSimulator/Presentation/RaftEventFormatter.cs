@@ -1,6 +1,6 @@
 using RaftSimulator.Logic.Events;
 
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Presentation;
 
 /// <summary>
 /// Formats raft events as log messages.

@@ -1,9 +1,9 @@
 using FluentAssertions;
 
-using RaftSimulator.Logic;
 using RaftSimulator.Logic.Events;
+using RaftSimulator.Presentation;
 
-namespace RaftSimulator.Tests.Logic;
+namespace RaftSimulator.Tests.Presentation;
 
 public sealed class RaftEventFormatterTests
 {

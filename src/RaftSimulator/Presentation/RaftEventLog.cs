@@ -1,5 +1,4 @@
 using RaftSimulator.Abstractions;
-using RaftSimulator.Logic;
 using RaftSimulator.Logic.Events;
 
 namespace RaftSimulator.Presentation;
