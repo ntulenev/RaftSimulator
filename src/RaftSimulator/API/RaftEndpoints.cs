@@ -23,16 +23,12 @@ internal static class RaftEndpoints
                     IRaftNode node,
                     CancellationToken cancellationToken) =>
                 {
-                    if (!IsValid(request.Term, request.CandidateId))
-                    {
-                        return Results.BadRequest("Term and CandidateId must be positive.");
-                    }
-
                     var response = await node
                         .OnRequestVoteAsync(RaftDtoMapper.ToDomain(request), cancellationToken)
                         .ConfigureAwait(false);
                     return Results.Ok(RaftDtoMapper.ToDto(response));
                 })
+            .AddEndpointFilter<RequestVoteValidationFilter>()
             .WithName("RaftRequestVote");
 
         _ = app.MapPost("/raft/append-entries", async (
@@ -40,16 +36,12 @@ internal static class RaftEndpoints
                     IRaftNode node,
                     CancellationToken cancellationToken) =>
                 {
-                    if (!IsValid(request.Term, request.LeaderId))
-                    {
-                        return Results.BadRequest("Term and LeaderId must be positive.");
-                    }
-
                     var response = await node
                         .OnAppendEntriesAsync(RaftDtoMapper.ToDomain(request), cancellationToken)
                         .ConfigureAwait(false);
                     return Results.Ok(RaftDtoMapper.ToDto(response));
                 })
+            .AddEndpointFilter<AppendEntriesValidationFilter>()
             .WithName("RaftAppendEntries");
 
         _ = app.MapGet("/raft/status", (IRaftNode node) =>
@@ -58,7 +50,4 @@ internal static class RaftEndpoints
 
         return app;
     }
-
-    private static bool IsValid(int term, int nodeId) =>
-        term > 0 && nodeId > 0;
 }
