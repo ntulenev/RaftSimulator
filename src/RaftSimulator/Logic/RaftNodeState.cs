@@ -7,23 +7,60 @@ namespace RaftSimulator.Logic;
 /// </summary>
 internal sealed class RaftNodeState
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RaftNodeState"/> class.
+    /// </summary>
+    public RaftNodeState()
+    {
+    }
+
+    /// <summary>
+    /// Gets or sets current node role.
+    /// </summary>
     public RaftRole Role { get; set; }
 
+    /// <summary>
+    /// Gets or sets current term.
+    /// </summary>
     public int CurrentTerm { get; set; }
 
+    /// <summary>
+    /// Gets or sets node voted for in the current term.
+    /// </summary>
     public int? VotedFor { get; set; }
 
+    /// <summary>
+    /// Gets or sets known leader identifier.
+    /// </summary>
     public int? LeaderId { get; set; }
 
+    /// <summary>
+    /// Gets or sets votes received in the current election.
+    /// </summary>
     public int VotesReceived { get; set; }
 
+    /// <summary>
+    /// Gets or sets time when this node became leader.
+    /// </summary>
     public DateTimeOffset LeaderSince { get; set; }
 
+    /// <summary>
+    /// Gets or sets next election deadline.
+    /// </summary>
     public DateTimeOffset NextElectionDeadline { get; set; }
 
+    /// <summary>
+    /// Gets or sets next heartbeat deadline.
+    /// </summary>
     public DateTimeOffset NextHeartbeatAt { get; set; }
 
+    /// <summary>
+    /// Gets or sets last term for which election status was reported.
+    /// </summary>
     public int LastReportedTerm { get; set; } = -1;
 
+    /// <summary>
+    /// Gets last successful heartbeat acknowledgement time by peer identifier.
+    /// </summary>
     public Dictionary<int, DateTimeOffset> LastHeartbeatAckAt { get; } = [];
 }

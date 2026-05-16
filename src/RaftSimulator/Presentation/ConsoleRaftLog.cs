@@ -8,6 +8,13 @@ namespace RaftSimulator.Presentation;
 /// </summary>
 internal sealed class ConsoleRaftLog : IRaftLog
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ConsoleRaftLog"/> class.
+    /// </summary>
+    public ConsoleRaftLog()
+    {
+    }
+
     /// <inheritdoc />
     public void WriteNode(int nodeId, string message)
     {

@@ -3,6 +3,8 @@ namespace RaftSimulator.Models.Configuration;
 /// <summary>
 /// Peer configuration entry.
 /// </summary>
+/// <param name="Id">Peer node identifier.</param>
+/// <param name="BaseUrl">Peer base URL.</param>
 internal sealed record PeerInfo(int Id, Uri BaseUrl)
 {
     /// <summary>
