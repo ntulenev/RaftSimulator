@@ -38,13 +38,14 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(scheduler);
 
         _settings = settings;
-        _peerBroadcaster = peerBroadcaster;
         _log = log;
         _eventLog = eventLog;
         _clock = clock;
         _delayProvider = delayProvider;
         _scheduler = scheduler;
         _stateMachine = new RaftStateMachine(settings);
+        _electionRunner = new RaftElectionRunner(peerBroadcaster, log);
+        _heartbeatRunner = new RaftHeartbeatRunner(peerBroadcaster, log);
     }
 
     /// <inheritdoc />
@@ -169,7 +170,9 @@ internal sealed class RaftNode : IRaftNode
             return;
         }
 
-        await StartElectionAsync(action.Term, cancellationToken).ConfigureAwait(false);
+        await _electionRunner
+            .StartElectionAsync(action.Term, Id, HandleVoteResponseAsync, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private TimeoutAction PrepareTimeoutAction()
@@ -182,32 +185,6 @@ internal sealed class RaftNode : IRaftNode
                 _settings.HeartbeatInterval);
             SignalScheduleChangeUnsafe();
             return action;
-        }
-    }
-
-    private async Task StartElectionAsync(int term, CancellationToken cancellationToken)
-    {
-        var results = await _peerBroadcaster
-            .RequestVotesAsync(term, Id, cancellationToken)
-            .ConfigureAwait(false);
-
-        foreach (var result in results)
-        {
-            _log.WriteNode(Id, $"RequestVote -> Node {result.Peer.Id:00} (term {term}).");
-
-            if (result.Error is not null)
-            {
-                LogPeerFailure("RequestVote", result.Peer.Id, term, result.Error);
-                continue;
-            }
-
-            if (result.Response is null)
-            {
-                _log.WriteNode(Id, $"VoteResponse unavailable from Node {result.Peer.Id:00}.");
-                continue;
-            }
-
-            await HandleVoteResponseAsync(result.Response, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -244,31 +221,15 @@ internal sealed class RaftNode : IRaftNode
 
     private async Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
     {
-        ReportQuorum();
-
-        var results = await _peerBroadcaster
-            .SendHeartbeatsAsync(term, Id, cancellationToken)
+        await _heartbeatRunner
+            .SendHeartbeatsAsync(
+                term,
+                Id,
+                ReportQuorum,
+                HandleAppendEntriesResponse,
+                RegisterHeartbeatAck,
+                cancellationToken)
             .ConfigureAwait(false);
-
-        foreach (var result in results)
-        {
-            _log.WriteNode(Id, $"AppendEntries -> Node {result.Peer.Id:00} (term {term}).");
-
-            if (result.Error is not null)
-            {
-                LogPeerFailure("AppendEntries", result.Peer.Id, term, result.Error);
-                continue;
-            }
-
-            if (result.Response is null)
-            {
-                _log.WriteNode(Id, $"AppendEntries unavailable from Node {result.Peer.Id:00}.");
-                continue;
-            }
-
-            HandleAppendEntriesResponse(result.Response);
-            RegisterHeartbeatAck(result.Peer.Id);
-        }
     }
 
     private TimeSpan GetNextDelay()
@@ -330,20 +291,6 @@ internal sealed class RaftNode : IRaftNode
         LogEvents(decision.Events);
     }
 
-    private void LogPeerFailure(string rpcName, int peerId, int term, Exception exception)
-    {
-        if (exception is HttpRequestException or TaskCanceledException)
-        {
-            _log.WriteNode(Id, $"Unable to reach Node {peerId:00}.");
-            return;
-        }
-
-        _log.WriteNode(
-            Id,
-            $"{rpcName} (term {term}) -> Node {peerId:00} failed: " +
-            $"{exception.GetType().Name}: {exception.Message}");
-    }
-
     private void LogEvents(IEnumerable<RaftEvent> events)
     {
         foreach (var raftEvent in events)
@@ -356,12 +303,13 @@ internal sealed class RaftNode : IRaftNode
         _eventLog.WriteNodeEvent(Id, raftEvent);
 
     private readonly RaftSettings _settings;
-    private readonly IRaftPeerBroadcaster _peerBroadcaster;
     private readonly IRaftLog _log;
     private readonly IRaftEventLog _eventLog;
     private readonly IRaftClock _clock;
     private readonly IRaftDelayProvider _delayProvider;
     private readonly IRaftScheduler _scheduler;
     private readonly RaftStateMachine _stateMachine;
+    private readonly RaftElectionRunner _electionRunner;
+    private readonly RaftHeartbeatRunner _heartbeatRunner;
     private readonly Lock _gate = new();
 }
