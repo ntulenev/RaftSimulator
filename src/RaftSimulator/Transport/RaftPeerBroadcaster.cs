@@ -70,21 +70,33 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
             await DelayNetworkAsync(cancellationToken).ConfigureAwait(false);
             return await sendAsync(peer).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
-            return PeerRpcResult<TResponse>.Unavailable(peer);
+            return PeerRpcResultFactory.FromException<TResponse>(
+                peer,
+                exception,
+                cancellationToken);
         }
         catch (HttpRequestException exception)
         {
-            return PeerRpcResult<TResponse>.Failed(peer, exception);
+            return PeerRpcResultFactory.FromException<TResponse>(
+                peer,
+                exception,
+                cancellationToken);
         }
         catch (TaskCanceledException exception)
         {
-            return PeerRpcResult<TResponse>.Failed(peer, exception);
+            return PeerRpcResultFactory.FromException<TResponse>(
+                peer,
+                exception,
+                cancellationToken);
         }
         catch (InvalidOperationException exception)
         {
-            return PeerRpcResult<TResponse>.Failed(peer, exception);
+            return PeerRpcResultFactory.FromException<TResponse>(
+                peer,
+                exception,
+                cancellationToken);
         }
     }
 
@@ -98,9 +110,7 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
             .RequestVoteAsync(peer, new RaftVoteRequest(term, candidateId), cancellationToken)
             .ConfigureAwait(false);
 
-        return response is null
-            ? PeerRpcResult<RaftVoteResponse>.Unavailable(peer)
-            : PeerRpcResult<RaftVoteResponse>.Success(peer, response);
+        return PeerRpcResultFactory.FromResponse(peer, response);
     }
 
     private async Task<PeerRpcResult<RaftAppendEntriesResponse>> AppendEntriesAsync(
@@ -113,9 +123,7 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
             .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(term, leaderId), cancellationToken)
             .ConfigureAwait(false);
 
-        return response is null
-            ? PeerRpcResult<RaftAppendEntriesResponse>.Unavailable(peer)
-            : PeerRpcResult<RaftAppendEntriesResponse>.Success(peer, response);
+        return PeerRpcResultFactory.FromResponse(peer, response);
     }
 
     private Task DelayNetworkAsync(CancellationToken cancellationToken)
