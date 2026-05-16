@@ -1,6 +1,7 @@
 using FluentAssertions;
 
 using RaftSimulator.Logic;
+using RaftSimulator.Logic.Events;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
 
@@ -81,6 +82,54 @@ public sealed class RaftStateMachineTests
         decision.StatusSnapshot.Should().NotBeNull();
         status.Role.Should().Be(RaftRole.Leader);
         status.LeaderId.Should().Be(new LeaderId(1));
+    }
+
+    [Fact(DisplayName = "Accepted heartbeat resets follower election deadline")]
+    [Trait("Category", "Unit")]
+    public void AcceptedHeartbeatResetsFollowerElectionDeadline()
+    {
+        // Arrange
+        var machine = CreateStateMachine();
+        var now = TestNow;
+        machine.Initialize(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        var heartbeatAt = now + TimeSpan.FromSeconds(3);
+
+        // Act
+        var decision = machine.HandleAppendEntries(
+            new RaftAppendEntriesRequest(1, 2),
+            heartbeatAt,
+            TimeSpan.FromSeconds(5));
+        var delay = machine.GetNextDelay(heartbeatAt + TimeSpan.FromSeconds(4));
+
+        // Assert
+        decision.Response.Success.Should().BeTrue();
+        delay.Should().Be(TimeSpan.FromSeconds(1));
+    }
+
+    [Fact(DisplayName = "Leader reports out of quorum when heartbeat acknowledgements are stale")]
+    [Trait("Category", "Unit")]
+    public void LeaderReportsOutOfQuorumWhenHeartbeatAcknowledgementsAreStale()
+    {
+        // Arrange
+        var machine = CreateStateMachine();
+        var now = TestNow;
+        machine.Initialize(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        var timeout = machine.PrepareTimeoutAction(
+            now,
+            TimeSpan.FromSeconds(4),
+            TimeSpan.FromSeconds(1));
+        _ = machine.HandleVoteResponse(
+            new RaftVoteResponse(timeout.Term, 2, true),
+            now,
+            TimeSpan.FromSeconds(4));
+
+        // Act
+        var quorumEvent = machine.BuildQuorumEvent(
+            now + TimeSpan.FromSeconds(3),
+            TimeSpan.FromSeconds(2));
+
+        // Assert
+        quorumEvent.Should().BeEquivalentTo(new OutOfQuorumEvent(1, 3, 2));
     }
 
     [Fact(DisplayName = "AppendEntries response with higher term steps down")]

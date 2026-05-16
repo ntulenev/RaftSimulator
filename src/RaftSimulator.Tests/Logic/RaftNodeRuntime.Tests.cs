@@ -43,6 +43,41 @@ public sealed class RaftNodeRuntimeTests
         log.Messages.Should().Contain("Stopped.");
     }
 
+    [Fact(DisplayName = "RunAsync sends heartbeats after winning an election")]
+    [Trait("Category", "Unit")]
+    public async Task RunAsyncSendsHeartbeatsAfterWinningAnElection()
+    {
+        // Arrange
+        var settings = CreateSettings();
+        var clock = new TestClock();
+        var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
+        var broadcaster = new SpyBroadcaster
+        {
+            VoteResults =
+            [
+                PeerRpcResult<RaftVoteResponse>.Success(
+                    settings.Peers[0],
+                    new RaftVoteResponse(1, settings.Peers[0].Id, true))
+            ]
+        };
+        var node = new RaftNode(
+            settings,
+            broadcaster,
+            new TestRaftLog(),
+            new TestRaftEventLog(),
+            clock,
+            new FixedRandom(),
+            scheduler);
+
+        // Act
+        await node.RunAsync(CancellationToken.None);
+
+        // Assert
+        broadcaster.SendHeartbeatCalls.Should().Be(1);
+        broadcaster.LastHeartbeatTerm.Should().Be(1);
+        broadcaster.LastLeaderId.Should().Be(1);
+    }
+
     private static RaftSettings CreateSettings()
     {
         var options = new RaftOptions
@@ -103,11 +138,19 @@ public sealed class RaftNodeRuntimeTests
 
     private sealed class SpyBroadcaster : IRaftPeerBroadcaster
     {
+        public IReadOnlyList<PeerRpcResult<RaftVoteResponse>> VoteResults { get; init; } = [];
+
         public int RequestVoteCalls { get; private set; }
+
+        public int SendHeartbeatCalls { get; private set; }
 
         public int LastVoteTerm { get; private set; }
 
         public int LastCandidateId { get; private set; }
+
+        public int LastHeartbeatTerm { get; private set; }
+
+        public int LastLeaderId { get; private set; }
 
         public Task<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>> RequestVotesAsync(
             int term,
@@ -119,7 +162,7 @@ public sealed class RaftNodeRuntimeTests
             RequestVoteCalls++;
             LastVoteTerm = term;
             LastCandidateId = candidateId;
-            return Task.FromResult<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>>([]);
+            return Task.FromResult(VoteResults);
         }
 
         public Task<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>> SendHeartbeatsAsync(
@@ -129,6 +172,9 @@ public sealed class RaftNodeRuntimeTests
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            SendHeartbeatCalls++;
+            LastHeartbeatTerm = term;
+            LastLeaderId = leaderId;
             return Task.FromResult<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>>([]);
         }
     }
