@@ -16,12 +16,6 @@ internal readonly record struct CandidateId(int Value) : IFormattable
         Value.ToString(format, formatProvider);
 
     /// <summary>
-    /// Converts a candidate identifier to its integer value.
-    /// </summary>
-    /// <param name="value">Candidate identifier value object.</param>
-    public static implicit operator int(CandidateId value) => value.Value;
-
-    /// <summary>
     /// Converts an integer to a candidate identifier value object.
     /// </summary>
     /// <param name="value">Integer value.</param>

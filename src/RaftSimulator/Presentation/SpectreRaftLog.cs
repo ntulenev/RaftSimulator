@@ -127,7 +127,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
         _ = grid.AddRow("[bold yellow]Node[/]", $"[cyan]{status.NodeId:00}[/]");
         _ = grid.AddRow("[bold yellow]Term[/]", $"[white]{status.Term}[/]");
         _ = grid.AddRow("[bold yellow]Role[/]", FormatRole(status.Role));
-        _ = grid.AddRow("[bold yellow]Leader[/]", FormatLeader(status.LeaderId));
+        _ = grid.AddRow("[bold yellow]Leader[/]", FormatLeader(status.LeaderId?.Value));
 
         var panel = new Panel(grid)
             .Header("[bold red]Election Result[/]", Justify.Left)

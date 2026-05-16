@@ -16,12 +16,6 @@ internal readonly record struct LeaderId(int Value) : IFormattable
         Value.ToString(format, formatProvider);
 
     /// <summary>
-    /// Converts a leader identifier to its integer value.
-    /// </summary>
-    /// <param name="value">Leader identifier value object.</param>
-    public static implicit operator int(LeaderId value) => value.Value;
-
-    /// <summary>
     /// Converts an integer to a leader identifier value object.
     /// </summary>
     /// <param name="value">Integer value.</param>
