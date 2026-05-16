@@ -23,6 +23,7 @@ builder.Services.AddSingleton(settings);
 builder.Services.AddSingleton<IRaftClock, SystemRaftClock>();
 builder.Services.AddSingleton<IRaftRandom, CryptoRaftRandom>();
 builder.Services.AddSingleton<IRaftLog, SpectreRaftLog>();
+builder.Services.AddSingleton<IRaftPeerBroadcaster, RaftPeerBroadcaster>();
 builder.Services.AddSingleton<IRaftNode, RaftNode>();
 builder.Services.AddHostedService<RaftHostedService>();
 builder.Services.AddHttpClient<IRaftPeerClient, RaftPeerClient>((sp, client) =>

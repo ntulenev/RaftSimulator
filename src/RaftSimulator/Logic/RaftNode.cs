@@ -15,25 +15,25 @@ internal sealed class RaftNode : IRaftNode
     /// Initializes a new instance of the <see cref="RaftNode"/> class.
     /// </summary>
     /// <param name="settings">Raft settings.</param>
-    /// <param name="peerClient">Peer client.</param>
+    /// <param name="peerBroadcaster">Peer broadcaster.</param>
     /// <param name="log">Log sink.</param>
     /// <param name="clock">Clock.</param>
     /// <param name="random">Random source.</param>
     public RaftNode(
         RaftSettings settings,
-        IRaftPeerClient peerClient,
+        IRaftPeerBroadcaster peerBroadcaster,
         IRaftLog log,
         IRaftClock clock,
         IRaftRandom random)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(peerClient);
+        ArgumentNullException.ThrowIfNull(peerBroadcaster);
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(random);
 
         _settings = settings;
-        _peerClient = peerClient;
+        _peerBroadcaster = peerBroadcaster;
         _log = log;
         _clock = clock;
         _random = random;
@@ -194,44 +194,29 @@ internal sealed class RaftNode : IRaftNode
         }
     }
 
-    private Task StartElectionAsync(int term, CancellationToken cancellationToken) =>
-        BroadcastToPeersAsync(
-            peer => RequestVoteFromPeerAsync(peer, term, cancellationToken),
-            $"RequestVote (term {term})");
-
-    private async Task RequestVoteFromPeerAsync(
-        PeerInfo peer,
-        int term,
-        CancellationToken cancellationToken)
+    private async Task StartElectionAsync(int term, CancellationToken cancellationToken)
     {
-        try
+        var results = await _peerBroadcaster
+            .RequestVotesAsync(term, Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var result in results)
         {
-            await DelayNetworkAsync(cancellationToken).ConfigureAwait(false);
+            _log.WriteNode(Id, $"RequestVote -> Node {result.Peer.Id:00} (term {term}).");
 
-            _log.WriteNode(Id, $"RequestVote -> Node {peer.Id:00} (term {term}).");
-
-            var response = await _peerClient
-                .RequestVoteAsync(peer, new RaftVoteRequest(term, Id), cancellationToken)
-                .ConfigureAwait(false);
-
-            if (response is null)
+            if (result.Error is not null)
             {
-                _log.WriteNode(Id, $"VoteResponse unavailable from Node {peer.Id:00}.");
-                return;
+                LogPeerFailure("RequestVote", result.Peer.Id, term, result.Error);
+                continue;
             }
 
-            await HandleVoteResponseAsync(response, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (HttpRequestException)
-        {
-            _log.WriteNode(Id, $"Unable to reach Node {peer.Id:00}.");
-        }
-        catch (TaskCanceledException)
-        {
-            _log.WriteNode(Id, $"Unable to reach Node {peer.Id:00}.");
+            if (result.Response is null)
+            {
+                _log.WriteNode(Id, $"VoteResponse unavailable from Node {result.Peer.Id:00}.");
+                continue;
+            }
+
+            await HandleVoteResponseAsync(result.Response, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -269,77 +254,32 @@ internal sealed class RaftNode : IRaftNode
         }
     }
 
-    private Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
+    private async Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
     {
         ReportQuorum();
-        return BroadcastToPeersAsync(
-            peer => SendHeartbeatToPeerAsync(peer, term, cancellationToken),
-            $"AppendEntries (term {term})");
-    }
 
-    private async Task SendHeartbeatToPeerAsync(
-        PeerInfo peer,
-        int term,
-        CancellationToken cancellationToken)
-    {
-        try
+        var results = await _peerBroadcaster
+            .SendHeartbeatsAsync(term, Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var result in results)
         {
-            await DelayNetworkAsync(cancellationToken).ConfigureAwait(false);
+            _log.WriteNode(Id, $"AppendEntries -> Node {result.Peer.Id:00} (term {term}).");
 
-            _log.WriteNode(Id, $"AppendEntries -> Node {peer.Id:00} (term {term}).");
-
-            var response = await _peerClient
-                .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(term, Id), cancellationToken)
-                .ConfigureAwait(false);
-
-            if (response is null)
+            if (result.Error is not null)
             {
-                _log.WriteNode(Id, $"AppendEntries unavailable from Node {peer.Id:00}.");
-                return;
+                LogPeerFailure("AppendEntries", result.Peer.Id, term, result.Error);
+                continue;
             }
 
-            HandleAppendEntriesResponse(response);
-            RegisterHeartbeatAck(peer.Id);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (HttpRequestException)
-        {
-            _log.WriteNode(Id, $"Unable to reach Node {peer.Id:00}.");
-        }
-        catch (TaskCanceledException)
-        {
-            _log.WriteNode(Id, $"Unable to reach Node {peer.Id:00}.");
-        }
-    }
+            if (result.Response is null)
+            {
+                _log.WriteNode(Id, $"AppendEntries unavailable from Node {result.Peer.Id:00}.");
+                continue;
+            }
 
-    private async Task BroadcastToPeersAsync(
-        Func<PeerInfo, Task> sendAsync,
-        string context)
-    {
-        var tasks = _settings
-            .Peers
-            .Select(peer => ObservePeerTaskAsync(peer, sendAsync, context));
-
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-    }
-
-    private async Task ObservePeerTaskAsync(
-        PeerInfo peer,
-        Func<PeerInfo, Task> sendAsync,
-        string context)
-    {
-        try
-        {
-            await sendAsync(peer).ConfigureAwait(false);
-        }
-        catch (InvalidOperationException exception)
-        {
-            _log.WriteNode(
-                Id,
-                $"{context} -> Node {peer.Id:00} failed: " +
-                $"{exception.GetType().Name}: {exception.Message}");
+            HandleAppendEntriesResponse(result.Response);
+            RegisterHeartbeatAck(result.Peer.Id);
         }
     }
 
@@ -353,17 +293,6 @@ internal sealed class RaftNode : IRaftNode
 
     private TimeSpan GetRandomElectionTimeout() =>
         GetRandomDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
-
-    private Task DelayNetworkAsync(CancellationToken cancellationToken)
-    {
-        var delay = GetRandomNetworkDelay();
-        return delay > TimeSpan.Zero
-            ? Task.Delay(delay, cancellationToken)
-            : Task.CompletedTask;
-    }
-
-    private TimeSpan GetRandomNetworkDelay() =>
-        GetRandomDelay(_settings.MinNetworkDelay, _settings.MaxNetworkDelay);
 
     private TimeSpan GetRandomDelay(TimeSpan min, TimeSpan max)
     {
@@ -435,8 +364,22 @@ internal sealed class RaftNode : IRaftNode
         }
     }
 
+    private void LogPeerFailure(string rpcName, int peerId, int term, Exception exception)
+    {
+        if (exception is HttpRequestException or TaskCanceledException)
+        {
+            _log.WriteNode(Id, $"Unable to reach Node {peerId:00}.");
+            return;
+        }
+
+        _log.WriteNode(
+            Id,
+            $"{rpcName} (term {term}) -> Node {peerId:00} failed: " +
+            $"{exception.GetType().Name}: {exception.Message}");
+    }
+
     private readonly RaftSettings _settings;
-    private readonly IRaftPeerClient _peerClient;
+    private readonly IRaftPeerBroadcaster _peerBroadcaster;
     private readonly IRaftLog _log;
     private readonly IRaftClock _clock;
     private readonly IRaftRandom _random;
