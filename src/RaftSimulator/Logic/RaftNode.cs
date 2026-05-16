@@ -16,6 +16,7 @@ internal sealed class RaftNode : IRaftNode
     /// <param name="settings">Raft settings.</param>
     /// <param name="peerBroadcaster">Peer broadcaster.</param>
     /// <param name="log">Log sink.</param>
+    /// <param name="eventLog">Event log sink.</param>
     /// <param name="clock">Clock.</param>
     /// <param name="random">Random source.</param>
     /// <param name="scheduler">Runtime scheduler.</param>
@@ -23,6 +24,7 @@ internal sealed class RaftNode : IRaftNode
         RaftSettings settings,
         IRaftPeerBroadcaster peerBroadcaster,
         IRaftLog log,
+        IRaftEventLog eventLog,
         IRaftClock clock,
         IRaftRandom random,
         IRaftScheduler scheduler)
@@ -30,6 +32,7 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(peerBroadcaster);
         ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(eventLog);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(random);
         ArgumentNullException.ThrowIfNull(scheduler);
@@ -37,6 +40,7 @@ internal sealed class RaftNode : IRaftNode
         _settings = settings;
         _peerBroadcaster = peerBroadcaster;
         _log = log;
+        _eventLog = eventLog;
         _clock = clock;
         _random = random;
         _scheduler = scheduler;
@@ -361,11 +365,12 @@ internal sealed class RaftNode : IRaftNode
     }
 
     private void LogEvent(RaftEvent raftEvent) =>
-        _log.WriteNode(Id, RaftEventFormatter.Format(raftEvent));
+        _eventLog.WriteNodeEvent(Id, raftEvent);
 
     private readonly RaftSettings _settings;
     private readonly IRaftPeerBroadcaster _peerBroadcaster;
     private readonly IRaftLog _log;
+    private readonly IRaftEventLog _eventLog;
     private readonly IRaftClock _clock;
     private readonly IRaftRandom _random;
     private readonly IRaftScheduler _scheduler;

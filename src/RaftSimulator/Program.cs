@@ -24,6 +24,7 @@ builder.Services.AddSingleton<IRaftClock, SystemRaftClock>();
 builder.Services.AddSingleton<IRaftRandom, CryptoRaftRandom>();
 builder.Services.AddSingleton<IRaftScheduler, RaftScheduler>();
 builder.Services.AddSingleton<IRaftLog, SpectreRaftLog>();
+builder.Services.AddSingleton<IRaftEventLog, RaftEventLog>();
 builder.Services.AddSingleton<IRaftPeerBroadcaster, RaftPeerBroadcaster>();
 builder.Services.AddSingleton<IRaftNode, RaftNode>();
 builder.Services.AddHostedService<RaftHostedService>();
