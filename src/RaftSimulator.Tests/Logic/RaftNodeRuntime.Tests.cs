@@ -28,7 +28,7 @@ public sealed class RaftNodeRuntimeTests
             log,
             eventLog,
             clock,
-            new FixedRandom(),
+            new FixedDelayProvider(),
             scheduler);
 
         // Act
@@ -66,7 +66,7 @@ public sealed class RaftNodeRuntimeTests
             new TestRaftLog(),
             new TestRaftEventLog(),
             clock,
-            new FixedRandom(),
+            new FixedDelayProvider(),
             scheduler);
 
         // Act
@@ -131,9 +131,9 @@ public sealed class RaftNodeRuntimeTests
             UtcNow += value;
     }
 
-    private sealed class FixedRandom : IRaftRandom
+    private sealed class FixedDelayProvider : IRaftDelayProvider
     {
-        public double NextDouble() => 0;
+        public TimeSpan GetDelay(TimeSpan min, TimeSpan max) => min;
     }
 
     private sealed class SpyBroadcaster : IRaftPeerBroadcaster

@@ -29,7 +29,7 @@ public sealed class RaftPeerBroadcasterTests
         var broadcaster = new RaftPeerBroadcaster(
             settings,
             peerClient.Object,
-            new FixedRandom());
+            new FixedDelayProvider());
 
         // Act
         var results = await broadcaster.RequestVotesAsync(2, 1, CancellationToken.None);
@@ -57,7 +57,7 @@ public sealed class RaftPeerBroadcasterTests
         var broadcaster = new RaftPeerBroadcaster(
             settings,
             peerClient.Object,
-            new FixedRandom());
+            new FixedDelayProvider());
 
         // Act
         var results = await broadcaster.SendHeartbeatsAsync(3, 1, CancellationToken.None);
@@ -84,7 +84,7 @@ public sealed class RaftPeerBroadcasterTests
         var broadcaster = new RaftPeerBroadcaster(
             settings,
             peerClient.Object,
-            new FixedRandom());
+            new FixedDelayProvider());
 
         // Act
         var results = await broadcaster.RequestVotesAsync(2, 1, CancellationToken.None);
@@ -112,7 +112,7 @@ public sealed class RaftPeerBroadcasterTests
         var broadcaster = new RaftPeerBroadcaster(
             settings,
             peerClient.Object,
-            new FixedRandom());
+            new FixedDelayProvider());
 
         // Act
         var results = await broadcaster.RequestVotesAsync(2, 1, CancellationToken.None);
@@ -140,8 +140,8 @@ public sealed class RaftPeerBroadcasterTests
         return RaftSettings.FromOptions(options);
     }
 
-    private sealed class FixedRandom : IRaftRandom
+    private sealed class FixedDelayProvider : IRaftDelayProvider
     {
-        public double NextDouble() => 0;
+        public TimeSpan GetDelay(TimeSpan min, TimeSpan max) => min;
     }
 }

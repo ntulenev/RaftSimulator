@@ -14,19 +14,19 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
     /// </summary>
     /// <param name="settings">Raft settings.</param>
     /// <param name="peerClient">Peer client.</param>
-    /// <param name="random">Random source.</param>
+    /// <param name="delayProvider">Delay provider.</param>
     public RaftPeerBroadcaster(
         RaftSettings settings,
         IRaftPeerClient peerClient,
-        IRaftRandom random)
+        IRaftDelayProvider delayProvider)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(peerClient);
-        ArgumentNullException.ThrowIfNull(random);
+        ArgumentNullException.ThrowIfNull(delayProvider);
 
         _settings = settings;
         _peerClient = peerClient;
-        _random = random;
+        _delayProvider = delayProvider;
     }
 
     /// <inheritdoc />
@@ -120,25 +120,13 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
 
     private Task DelayNetworkAsync(CancellationToken cancellationToken)
     {
-        var delay = GetRandomDelay(_settings.MinNetworkDelay, _settings.MaxNetworkDelay);
+        var delay = _delayProvider.GetDelay(_settings.MinNetworkDelay, _settings.MaxNetworkDelay);
         return delay > TimeSpan.Zero
             ? Task.Delay(delay, cancellationToken)
             : Task.CompletedTask;
     }
 
-    private TimeSpan GetRandomDelay(TimeSpan min, TimeSpan max)
-    {
-        if (min == max)
-        {
-            return min;
-        }
-
-        var window = max - min;
-        var offset = TimeSpan.FromMilliseconds(window.TotalMilliseconds * _random.NextDouble());
-        return min + offset;
-    }
-
     private readonly RaftSettings _settings;
     private readonly IRaftPeerClient _peerClient;
-    private readonly IRaftRandom _random;
+    private readonly IRaftDelayProvider _delayProvider;
 }

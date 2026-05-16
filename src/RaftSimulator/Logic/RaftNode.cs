@@ -18,7 +18,7 @@ internal sealed class RaftNode : IRaftNode
     /// <param name="log">Log sink.</param>
     /// <param name="eventLog">Event log sink.</param>
     /// <param name="clock">Clock.</param>
-    /// <param name="random">Random source.</param>
+    /// <param name="delayProvider">Delay provider.</param>
     /// <param name="scheduler">Runtime scheduler.</param>
     public RaftNode(
         RaftSettings settings,
@@ -26,7 +26,7 @@ internal sealed class RaftNode : IRaftNode
         IRaftLog log,
         IRaftEventLog eventLog,
         IRaftClock clock,
-        IRaftRandom random,
+        IRaftDelayProvider delayProvider,
         IRaftScheduler scheduler)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -34,7 +34,7 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(eventLog);
         ArgumentNullException.ThrowIfNull(clock);
-        ArgumentNullException.ThrowIfNull(random);
+        ArgumentNullException.ThrowIfNull(delayProvider);
         ArgumentNullException.ThrowIfNull(scheduler);
 
         _settings = settings;
@@ -42,7 +42,7 @@ internal sealed class RaftNode : IRaftNode
         _log = log;
         _eventLog = eventLog;
         _clock = clock;
-        _random = random;
+        _delayProvider = delayProvider;
         _scheduler = scheduler;
         _stateMachine = new RaftStateMachine(settings);
     }
@@ -280,19 +280,7 @@ internal sealed class RaftNode : IRaftNode
     }
 
     private TimeSpan GetRandomElectionTimeout() =>
-        GetRandomDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
-
-    private TimeSpan GetRandomDelay(TimeSpan min, TimeSpan max)
-    {
-        if (min == max)
-        {
-            return min;
-        }
-
-        var window = max - min;
-        var offset = TimeSpan.FromMilliseconds(window.TotalMilliseconds * _random.NextDouble());
-        return min + offset;
-    }
+        _delayProvider.GetDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
 
     private void SignalScheduleChangeUnsafe() =>
         _scheduler.Signal();
@@ -372,7 +360,7 @@ internal sealed class RaftNode : IRaftNode
     private readonly IRaftLog _log;
     private readonly IRaftEventLog _eventLog;
     private readonly IRaftClock _clock;
-    private readonly IRaftRandom _random;
+    private readonly IRaftDelayProvider _delayProvider;
     private readonly IRaftScheduler _scheduler;
     private readonly RaftStateMachine _stateMachine;
     private readonly Lock _gate = new();
