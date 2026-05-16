@@ -123,6 +123,35 @@ public sealed class RaftPeerBroadcasterTests
             result.Response == null && result.Error!.GetType() == typeof(HttpRequestException));
     }
 
+    [Fact(DisplayName = "RequestVotes maps requested cancellation to unavailable peers")]
+    [Trait("Category", "Unit")]
+    public async Task RequestVotesMapsRequestedCancellationToUnavailablePeers()
+    {
+        // Arrange
+        var settings = CreateSettings();
+        using var source = new CancellationTokenSource();
+        await source.CancelAsync();
+        var peerClient = new Mock<IRaftPeerClient>(MockBehavior.Strict);
+        peerClient
+            .Setup(client => client.RequestVoteAsync(
+                It.IsAny<PeerInfo>(),
+                It.IsAny<RaftVoteRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException(source.Token));
+
+        var broadcaster = new RaftPeerBroadcaster(
+            settings,
+            peerClient.Object,
+            new FixedDelayProvider());
+
+        // Act
+        var results = await broadcaster.RequestVotesAsync(2, 1, source.Token);
+
+        // Assert
+        results.Should().HaveCount(2);
+        results.Should().OnlyContain(result => result.Response == null && result.Error == null);
+    }
+
     private static RaftSettings CreateSettings()
     {
         var options = new RaftOptions
