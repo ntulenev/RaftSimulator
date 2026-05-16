@@ -1,3 +1,4 @@
+using RaftSimulator.Logic.Events;
 using RaftSimulator.Models.Domain;
 
 namespace RaftSimulator.Logic;
@@ -6,5 +7,5 @@ namespace RaftSimulator.Logic;
 /// Result of handling a vote request.
 /// </summary>
 /// <param name="Response">Vote response to return.</param>
-/// <param name="LogLine">Log line for the decision.</param>
-internal sealed record VoteDecision(RaftVoteResponse Response, string LogLine);
+/// <param name="Events">Events emitted by the decision.</param>
+internal sealed record VoteDecision(RaftVoteResponse Response, IReadOnlyList<RaftEvent> Events);

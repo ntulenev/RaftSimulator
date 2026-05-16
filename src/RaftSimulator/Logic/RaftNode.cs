@@ -1,4 +1,5 @@
 using RaftSimulator.Abstractions;
+using RaftSimulator.Logic.Events;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
 
@@ -95,7 +96,7 @@ internal sealed class RaftNode : IRaftNode
             SignalScheduleChangeUnsafe();
         }
 
-        _log.WriteNode(Id, decision.LogLine);
+        LogEvents(decision.Events);
         return Task.FromResult(decision.Response);
     }
 
@@ -118,7 +119,7 @@ internal sealed class RaftNode : IRaftNode
             SignalScheduleChangeUnsafe();
         }
 
-        _log.WriteNode(Id, decision.LogLine);
+        LogEvents(decision.Events);
         if (decision.StatusSnapshot is not null)
         {
             _log.WriteNodeStatus(decision.StatusSnapshot);
@@ -156,7 +157,7 @@ internal sealed class RaftNode : IRaftNode
         }
 
         var action = PrepareTimeoutAction();
-        _log.WriteNode(Id, action.LogLine);
+        LogEvents(action.Events);
 
         if (action.Type == TimeoutActionType.Heartbeats)
         {
@@ -218,16 +219,13 @@ internal sealed class RaftNode : IRaftNode
                 response,
                 _clock.UtcNow,
                 GetRandomElectionTimeout());
-            if (decision.LogLines.Count > 0 || decision.BecameLeader)
+            if (decision.Events.Count > 0 || decision.BecameLeader)
             {
                 SignalScheduleChangeUnsafe();
             }
         }
 
-        foreach (var logLine in decision.LogLines)
-        {
-            _log.WriteNode(Id, logLine);
-        }
+        LogEvents(decision.Events);
 
         if (decision.StatusSnapshot is not null)
         {
@@ -305,16 +303,16 @@ internal sealed class RaftNode : IRaftNode
 
     private void ReportQuorum()
     {
-        string? warning;
+        RaftEvent? quorumEvent;
 
         lock (_gate)
         {
-            warning = _stateMachine.BuildQuorumWarning(_clock.UtcNow, GetQuorumWindow());
+            quorumEvent = _stateMachine.BuildQuorumEvent(_clock.UtcNow, GetQuorumWindow());
         }
 
-        if (warning is not null)
+        if (quorumEvent is not null)
         {
-            _log.WriteNode(Id, warning);
+            LogEvent(quorumEvent);
         }
     }
 
@@ -331,16 +329,13 @@ internal sealed class RaftNode : IRaftNode
                 response,
                 _clock.UtcNow,
                 GetRandomElectionTimeout());
-            if (decision.LogLines.Count > 0)
+            if (decision.Events.Count > 0)
             {
                 SignalScheduleChangeUnsafe();
             }
         }
 
-        foreach (var logLine in decision.LogLines)
-        {
-            _log.WriteNode(Id, logLine);
-        }
+        LogEvents(decision.Events);
     }
 
     private void LogPeerFailure(string rpcName, int peerId, int term, Exception exception)
@@ -356,6 +351,17 @@ internal sealed class RaftNode : IRaftNode
             $"{rpcName} (term {term}) -> Node {peerId:00} failed: " +
             $"{exception.GetType().Name}: {exception.Message}");
     }
+
+    private void LogEvents(IEnumerable<RaftEvent> events)
+    {
+        foreach (var raftEvent in events)
+        {
+            LogEvent(raftEvent);
+        }
+    }
+
+    private void LogEvent(RaftEvent raftEvent) =>
+        _log.WriteNode(Id, RaftEventFormatter.Format(raftEvent));
 
     private readonly RaftSettings _settings;
     private readonly IRaftPeerBroadcaster _peerBroadcaster;

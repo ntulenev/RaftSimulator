@@ -108,7 +108,7 @@ public sealed class RaftStateMachineTests
         var status = machine.GetStatus();
 
         // Assert
-        decision.LogLines.Should().HaveCount(2);
+        decision.Events.Should().HaveCount(2);
         status.Term.Should().Be(new Term(4));
         status.Role.Should().Be(RaftRole.Follower);
         status.LeaderId.Should().BeNull();
