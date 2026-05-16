@@ -102,16 +102,6 @@ internal sealed class RaftSettings
             throw new InvalidOperationException(message);
         }
 
-        if (options.NodeId < 1)
-        {
-            throw new InvalidOperationException("Raft:NodeId must be >= 1.");
-        }
-
-        if (options.Port < 1)
-        {
-            throw new InvalidOperationException("Raft:Port must be specified.");
-        }
-
         if (options.MaxElectionSeconds < options.MinElectionSeconds)
         {
             throw new InvalidOperationException(

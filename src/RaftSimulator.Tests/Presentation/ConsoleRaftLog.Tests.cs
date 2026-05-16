@@ -7,6 +7,30 @@ namespace RaftSimulator.Tests.Presentation;
 
 public sealed class ConsoleRaftLogTests
 {
+    [Fact(DisplayName = "WriteNode writes node prefix")]
+    [Trait("Category", "Unit")]
+    public void WriteNodeWritesPrefix()
+    {
+        // Arrange
+        var log = new ConsoleRaftLog();
+        using var writer = new StringWriter();
+        var originalOut = Console.Out;
+        Console.SetOut(writer);
+
+        try
+        {
+            // Act
+            log.WriteNode(2, "Hello");
+
+            // Assert
+            writer.ToString().Should().Contain("[Node 02] Hello");
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+    }
+
     [Fact(DisplayName = "WriteNodeStatus writes status and restores color")]
     [Trait("Category", "Unit")]
     public void WriteNodeStatusWritesAndRestoresColor()

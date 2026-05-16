@@ -62,5 +62,29 @@ public sealed class RaftDomainModelsTests
         names.Should().Contain(ExpectedRoles);
     }
 
+    [Fact(DisplayName = "Identifier value objects format invariant values")]
+    [Trait("Category", "Unit")]
+    public void IdentifierValueObjectsFormatInvariantValues()
+    {
+        // Act
+        var candidate = new CandidateId(2);
+        var from = new FromId(3);
+        var leader = new LeaderId(4);
+        var node = new NodeId(5);
+        var term = new Term(6);
+
+        // Assert
+        candidate.ToString().Should().Be("2");
+        candidate.ToString("00", null).Should().Be("02");
+        from.ToString().Should().Be("3");
+        from.ToString("00", null).Should().Be("03");
+        leader.ToString().Should().Be("4");
+        leader.ToString("00", null).Should().Be("04");
+        node.ToString().Should().Be("5");
+        node.ToString("00", null).Should().Be("05");
+        term.ToString().Should().Be("6");
+        term.ToString("00", null).Should().Be("06");
+    }
+
     private static readonly string[] ExpectedRoles = ["Follower", "Candidate", "Leader"];
 }

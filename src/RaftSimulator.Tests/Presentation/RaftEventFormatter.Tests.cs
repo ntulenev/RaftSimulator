@@ -38,4 +38,17 @@ public sealed class RaftEventFormatterTests
             message.Should().Be(expected);
         }
     }
+
+    [Fact(DisplayName = "Format throws for unknown event type")]
+    [Trait("Category", "Unit")]
+    public void FormatWhenEventIsUnknownThrows()
+    {
+        // Act
+        var act = () => RaftEventFormatter.Format(new UnknownRaftEvent());
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    private sealed record UnknownRaftEvent : RaftEvent;
 }

@@ -42,6 +42,33 @@ public sealed class PeerInfoTests
         act.Should().Throw<FormatException>();
     }
 
+    [Theory(DisplayName = "Parse throws on malformed peer value")]
+    [Trait("Category", "Unit")]
+    [InlineData("")]
+    [InlineData("=http://localhost:5001")]
+    [InlineData("x=http://localhost:5001")]
+    [InlineData("1=")]
+    [InlineData("1=not-a-url")]
+    public void ParseWhenMalformedThrows(string input)
+    {
+        // Act
+        var act = () => PeerInfo.Parse(input);
+
+        // Assert
+        act.Should().Throw<FormatException>();
+    }
+
+    [Fact(DisplayName = "ParseList ignores empty peer segments")]
+    [Trait("Category", "Unit")]
+    public void ParseListIgnoresEmptyPeerSegments()
+    {
+        // Act
+        var peers = PeerInfo.ParseList(";1=http://localhost:5001;;2=http://localhost:5002;");
+
+        // Assert
+        peers.Select(peer => peer.Id).Should().Equal(1, 2);
+    }
+
     [Fact(DisplayName = "ParseList throws on duplicate peer ids")]
     [Trait("Category", "Unit")]
     public void ParseListWhenDuplicateIdsThrows()

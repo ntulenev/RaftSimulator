@@ -72,6 +72,52 @@ public sealed class RaftPeerClientTests
         handler.LastRequest?.RequestUri.Should().Be(peer.AppendEntriesUrl);
     }
 
+    [Fact(DisplayName = "AppendEntries returns null on non-success response")]
+    [Trait("Category", "Unit")]
+    public async Task AppendEntriesWhenResponseIsNotSuccessReturnsNull()
+    {
+        // Arrange
+        using var handler = new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        using var http = new HttpClient(handler);
+        var client = new RaftPeerClient(http);
+        var peer = new PeerInfo(2, new Uri("http://localhost:5002/"));
+
+        // Act
+        var response = await client
+            .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(1, 1), CancellationToken.None);
+
+        // Assert
+        response.Should().BeNull();
+    }
+
+    [Theory(DisplayName = "Peer client returns null on empty success payload")]
+    [Trait("Category", "Unit")]
+    [InlineData("request-vote")]
+    [InlineData("append-entries")]
+    public async Task PeerClientWhenSuccessPayloadIsEmptyReturnsNull(string rpcName)
+    {
+        // Arrange
+        using var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("null", Encoding.UTF8, "application/json")
+        });
+        using var http = new HttpClient(handler);
+        var client = new RaftPeerClient(http);
+        var peer = new PeerInfo(2, new Uri("http://localhost:5002/"));
+
+        // Act
+        object? response = rpcName == "request-vote"
+            ? await client.RequestVoteAsync(peer, new RaftVoteRequest(1, 1), CancellationToken.None)
+            : await client.AppendEntriesAsync(
+                peer,
+                new RaftAppendEntriesRequest(1, 1),
+                CancellationToken.None);
+
+        // Assert
+        response.Should().BeNull();
+    }
+
     private static HttpResponseMessage CreateJsonResponse<T>(T payload)
     {
         var json = JsonSerializer.Serialize(payload);

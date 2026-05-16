@@ -123,6 +123,34 @@ public sealed class RaftPeerBroadcasterTests
             result.Response == null && result.Error!.GetType() == typeof(HttpRequestException));
     }
 
+    [Fact(DisplayName = "SendHeartbeats captures peer timeouts")]
+    [Trait("Category", "Unit")]
+    public async Task SendHeartbeatsCapturesPeerTimeouts()
+    {
+        // Arrange
+        var settings = CreateSettings();
+        var peerClient = new Mock<IRaftPeerClient>(MockBehavior.Strict);
+        peerClient
+            .Setup(client => client.AppendEntriesAsync(
+                It.IsAny<PeerInfo>(),
+                It.IsAny<RaftAppendEntriesRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("timeout"));
+
+        var broadcaster = new RaftPeerBroadcaster(
+            settings,
+            peerClient.Object,
+            new FixedDelayProvider());
+
+        // Act
+        var results = await broadcaster.SendHeartbeatsAsync(2, 1, CancellationToken.None);
+
+        // Assert
+        results.Should().HaveCount(2);
+        results.Should().OnlyContain(result =>
+            result.Response == null && result.Error!.GetType() == typeof(TaskCanceledException));
+    }
+
     [Fact(DisplayName = "RequestVotes maps requested cancellation to unavailable peers")]
     [Trait("Category", "Unit")]
     public async Task RequestVotesMapsRequestedCancellationToUnavailablePeers()

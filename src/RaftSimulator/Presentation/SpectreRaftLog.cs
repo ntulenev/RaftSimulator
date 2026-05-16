@@ -163,11 +163,6 @@ internal sealed partial class SpectreRaftLog : IRaftLog
     private int GetLogLineLimit()
     {
         var height = _console.Profile.Height;
-        if (height <= 0)
-        {
-            return MAX_LOG_LINES;
-        }
-
         const int statusHeight = 8;
         const int panelChrome = 3;
 
