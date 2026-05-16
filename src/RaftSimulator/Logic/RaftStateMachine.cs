@@ -41,11 +41,10 @@ internal sealed class RaftStateMachine
         State.VotedFor = null;
         State.LeaderId = null;
         State.VotesReceived = 0;
-        State.LeaderSince = default;
-        State.LastHeartbeatAckAt.Clear();
+        ResetLeaderTracking();
         State.LastReportedTerm = null;
-        State.NextElectionDeadline = now + electionTimeout;
-        State.NextHeartbeatAt = now + heartbeatInterval;
+        ScheduleElection(now, electionTimeout);
+        ScheduleHeartbeat(now, heartbeatInterval);
     }
 
     /// <summary>
@@ -82,7 +81,7 @@ internal sealed class RaftStateMachine
             if (canVote)
             {
                 State.VotedFor = request.CandidateId;
-                State.NextElectionDeadline = now + electionTimeout;
+                ScheduleElection(now, electionTimeout);
             }
 
             response = new RaftVoteResponse(State.CurrentTerm, Id, canVote);
@@ -129,7 +128,7 @@ internal sealed class RaftStateMachine
             }
 
             State.LeaderId = request.LeaderId;
-            State.NextElectionDeadline = now + electionTimeout;
+            ScheduleElection(now, electionTimeout);
 
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, true);
             events.Add(new HeartbeatReceivedEvent(request.LeaderId.Value, State.CurrentTerm.Value));
@@ -157,19 +156,14 @@ internal sealed class RaftStateMachine
     {
         if (State.Role == RaftRole.Leader)
         {
-            State.NextHeartbeatAt = now + heartbeatInterval;
+            ScheduleHeartbeat(now, heartbeatInterval);
             return new TimeoutAction(
                 TimeoutActionType.Heartbeats,
                 State.CurrentTerm.Value,
                 [new LeaderHeartbeatEvent()]);
         }
 
-        State.Role = RaftRole.Candidate;
-        State.CurrentTerm = new Term(State.CurrentTerm.Value + 1);
-        State.VotedFor = new CandidateId(Id);
-        State.VotesReceived = 1;
-        State.LeaderId = null;
-        State.NextElectionDeadline = now + electionTimeout;
+        StartElection(now, electionTimeout);
 
         return new TimeoutAction(
             TimeoutActionType.Election,
@@ -219,12 +213,7 @@ internal sealed class RaftStateMachine
 
             if (State.VotesReceived >= _settings.Majority)
             {
-                State.Role = RaftRole.Leader;
-                State.LeaderId = new LeaderId(Id);
-                State.VotesReceived = 0;
-                State.NextHeartbeatAt = now;
-                State.LeaderSince = now;
-                State.LastHeartbeatAckAt.Clear();
+                BecomeLeader(now);
                 events.Add(new BecameLeaderEvent(State.CurrentTerm.Value));
                 becameLeader = true;
                 term = State.CurrentTerm.Value;
@@ -337,8 +326,7 @@ internal sealed class RaftStateMachine
         State.Role = RaftRole.Follower;
         State.LeaderId = leaderId is null ? null : new LeaderId(leaderId.Value);
         State.VotesReceived = 0;
-        State.LeaderSince = default;
-        State.LastHeartbeatAckAt.Clear();
+        ResetLeaderTracking();
 
         if (term > State.CurrentTerm.Value)
         {
@@ -346,10 +334,42 @@ internal sealed class RaftStateMachine
             State.VotedFor = null;
         }
 
-        State.NextElectionDeadline = now + electionTimeout;
+        ScheduleElection(now, electionTimeout);
 
         return new BecameFollowerEvent(State.CurrentTerm.Value, leaderId);
     }
+
+    private void StartElection(DateTimeOffset now, TimeSpan electionTimeout)
+    {
+        State.Role = RaftRole.Candidate;
+        State.CurrentTerm = new Term(State.CurrentTerm.Value + 1);
+        State.VotedFor = new CandidateId(Id);
+        State.VotesReceived = 1;
+        State.LeaderId = null;
+        ScheduleElection(now, electionTimeout);
+    }
+
+    private void BecomeLeader(DateTimeOffset now)
+    {
+        State.Role = RaftRole.Leader;
+        State.LeaderId = new LeaderId(Id);
+        State.VotesReceived = 0;
+        State.NextHeartbeatAt = now;
+        State.LeaderSince = now;
+        State.LastHeartbeatAckAt.Clear();
+    }
+
+    private void ResetLeaderTracking()
+    {
+        State.LeaderSince = default;
+        State.LastHeartbeatAckAt.Clear();
+    }
+
+    private void ScheduleElection(DateTimeOffset now, TimeSpan electionTimeout) =>
+        State.NextElectionDeadline = now + electionTimeout;
+
+    private void ScheduleHeartbeat(DateTimeOffset now, TimeSpan heartbeatInterval) =>
+        State.NextHeartbeatAt = now + heartbeatInterval;
 
     private bool TryGetElectionStatusSnapshot(out RaftStatus snapshot)
     {
