@@ -1,5 +1,3 @@
-using System.Threading.Channels;
-
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
@@ -19,31 +17,29 @@ internal sealed class RaftNode : IRaftNode
     /// <param name="log">Log sink.</param>
     /// <param name="clock">Clock.</param>
     /// <param name="random">Random source.</param>
+    /// <param name="scheduler">Runtime scheduler.</param>
     public RaftNode(
         RaftSettings settings,
         IRaftPeerBroadcaster peerBroadcaster,
         IRaftLog log,
         IRaftClock clock,
-        IRaftRandom random)
+        IRaftRandom random,
+        IRaftScheduler scheduler)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(peerBroadcaster);
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(random);
+        ArgumentNullException.ThrowIfNull(scheduler);
 
         _settings = settings;
         _peerBroadcaster = peerBroadcaster;
         _log = log;
         _clock = clock;
         _random = random;
+        _scheduler = scheduler;
         _stateMachine = new RaftStateMachine(settings);
-        _scheduleSignal = Channel.CreateUnbounded<bool>(
-            new UnboundedChannelOptions
-            {
-                SingleReader = true,
-                SingleWriter = false
-            });
     }
 
     /// <inheritdoc />
@@ -59,22 +55,12 @@ internal sealed class RaftNode : IRaftNode
         {
             while (true)
             {
-                var delay = GetNextDelay();
-                if (delay < TimeSpan.Zero)
-                {
-                    delay = TimeSpan.Zero;
-                }
-
-                var delayTask = Task.Delay(delay, cancellationToken);
-                var signalTask = _scheduleSignal.Reader.ReadAsync(cancellationToken).AsTask();
-                var completed = await Task
-                    .WhenAny(delayTask, signalTask)
+                var waitResult = await _scheduler
+                    .WaitAsync(GetNextDelay, cancellationToken)
                     .ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
 
-                if (completed == signalTask)
+                if (waitResult == RaftScheduleWaitResult.Signaled)
                 {
-                    DrainScheduleSignals();
                     continue;
                 }
 
@@ -306,15 +292,8 @@ internal sealed class RaftNode : IRaftNode
         return min + offset;
     }
 
-    private void DrainScheduleSignals()
-    {
-        while (_scheduleSignal.Reader.TryRead(out _))
-        {
-        }
-    }
-
     private void SignalScheduleChangeUnsafe() =>
-        _ = _scheduleSignal.Writer.TryWrite(true);
+        _scheduler.Signal();
 
     private void RegisterHeartbeatAck(int peerId)
     {
@@ -383,7 +362,7 @@ internal sealed class RaftNode : IRaftNode
     private readonly IRaftLog _log;
     private readonly IRaftClock _clock;
     private readonly IRaftRandom _random;
+    private readonly IRaftScheduler _scheduler;
     private readonly RaftStateMachine _stateMachine;
-    private readonly Channel<bool> _scheduleSignal;
     private readonly Lock _gate = new();
 }
