@@ -13,12 +13,7 @@ internal sealed record FromId : IFormattable
     /// <param name="value">Sender identifier value.</param>
     public FromId(int value)
     {
-        if (value < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(value), value, "Sender id must be >= 1.");
-        }
-
-        Value = value;
+        Value = DomainValueGuard.RequirePositiveId(value, nameof(value), "Sender id");
     }
 
     /// <summary>

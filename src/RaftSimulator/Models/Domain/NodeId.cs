@@ -13,12 +13,7 @@ internal sealed record NodeId : IFormattable
     /// <param name="value">Node identifier value.</param>
     public NodeId(int value)
     {
-        if (value < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(value), value, "Node id must be >= 1.");
-        }
-
-        Value = value;
+        Value = DomainValueGuard.RequirePositiveId(value, nameof(value), "Node id");
     }
 
     /// <summary>

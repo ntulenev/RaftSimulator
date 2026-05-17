@@ -13,12 +13,7 @@ internal sealed record CandidateId : IFormattable
     /// <param name="value">Candidate identifier value.</param>
     public CandidateId(int value)
     {
-        if (value < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(value), value, "Candidate id must be >= 1.");
-        }
-
-        Value = value;
+        Value = DomainValueGuard.RequirePositiveId(value, nameof(value), "Candidate id");
     }
 
     /// <summary>

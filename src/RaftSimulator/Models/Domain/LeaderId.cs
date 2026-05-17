@@ -13,12 +13,7 @@ internal sealed record LeaderId : IFormattable
     /// <param name="value">Leader identifier value.</param>
     public LeaderId(int value)
     {
-        if (value < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(value), value, "Leader id must be >= 1.");
-        }
-
-        Value = value;
+        Value = DomainValueGuard.RequirePositiveId(value, nameof(value), "Leader id");
     }
 
     /// <summary>

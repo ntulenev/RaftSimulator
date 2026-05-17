@@ -13,12 +13,7 @@ internal sealed record Term : IFormattable
     /// <param name="value">Term value.</param>
     public Term(int value)
     {
-        if (value < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(value), value, "Term must be >= 0.");
-        }
-
-        Value = value;
+        Value = DomainValueGuard.RequireNonNegativeTerm(value, nameof(value));
     }
 
     /// <summary>
