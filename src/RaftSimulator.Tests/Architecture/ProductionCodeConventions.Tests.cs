@@ -44,6 +44,23 @@ public sealed partial class ProductionCodeConventionsTests
         violations.Should().BeEmpty();
     }
 
+    [Fact(DisplayName = "Production namespaces match folders")]
+    [Trait("Category", "Architecture")]
+    public void ProductionNamespacesMatchFolders()
+    {
+        // Arrange
+        var files = GetProductionFiles();
+
+        // Act
+        var violations = files
+            .Select(GetNamespaceFolderViolation)
+            .Where(static violation => violation is not null)
+            .ToArray();
+
+        // Assert
+        violations.Should().BeEmpty();
+    }
+
     [Fact(DisplayName = "Domain models do not depend on outer layers")]
     [Trait("Category", "Architecture")]
     public void DomainModelsDoNotDependOnOuterLayers()
@@ -102,6 +119,56 @@ public sealed partial class ProductionCodeConventionsTests
 
         // Assert
         violations.Should().BeEmpty();
+    }
+
+    [Fact(DisplayName = "Transport DTOs stay in API and transport layers")]
+    [Trait("Category", "Architecture")]
+    public void TransportDtosStayInApiAndTransportLayers()
+    {
+        // Arrange
+        var files = GetProductionFiles()
+            .Where(static file => !IsInsideTopLevelFolder(file, "API"))
+            .Where(static file => !IsInsideTopLevelFolder(file, "Transport"))
+            .ToArray();
+
+        // Act
+        var violations = files
+            .SelectMany(GetTransportDtoDependencyViolations)
+            .ToArray();
+
+        // Assert
+        violations.Should().BeEmpty();
+    }
+
+    private static string? GetNamespaceFolderViolation(string file)
+    {
+        var declaredNamespace = File
+            .ReadLines(file)
+            .Select(static line => NamespaceRegex().Match(line))
+            .FirstOrDefault(static match => match.Success)
+            ?.Groups["namespace"].Value;
+
+        if (declaredNamespace is null)
+        {
+            return null;
+        }
+
+        var relativeDirectory = Path.GetDirectoryName(GetRelativePath(file));
+        var expectedNamespace = string.IsNullOrEmpty(relativeDirectory)
+            ? "RaftSimulator"
+            : $"RaftSimulator.{relativeDirectory.Replace(Path.DirectorySeparatorChar, '.')}";
+
+        return declaredNamespace == expectedNamespace
+            ? null
+            : $"{GetRelativePath(file)} declares {declaredNamespace}, expected {expectedNamespace}";
+    }
+
+    private static IEnumerable<string> GetTransportDtoDependencyViolations(string file)
+    {
+        return GetUsingDependencyViolations(
+            file,
+            TransportDtoUsingRegex(),
+            "depends on transport DTOs outside API or transport layer");
     }
 
     private static IEnumerable<string> GetTransportOrHostLayerDependencyViolations(string file)
@@ -213,6 +280,14 @@ public sealed partial class ProductionCodeConventionsTests
     private static string GetRelativePath(string file) =>
         Path.GetRelativePath(GetProductionProjectDirectory(), file);
 
+    private static bool IsInsideTopLevelFolder(string file, string folder)
+    {
+        var relativePath = GetRelativePath(file);
+        return relativePath.StartsWith(
+            $"{folder}{Path.DirectorySeparatorChar}",
+            StringComparison.Ordinal);
+    }
+
     [GeneratedRegex(@"^\s*(internal|public)\s+(sealed\s+|static\s+|abstract\s+|readonly\s+|partial\s+)*((record\s+)?(class|struct)|record|interface|enum)\s+")]
     private static partial Regex TypeDeclarationRegex();
 
@@ -224,4 +299,10 @@ public sealed partial class ProductionCodeConventionsTests
 
     [GeneratedRegex(@"^using\s+RaftSimulator\.(API|Hosting|Presentation|Transport)\b")]
     private static partial Regex TransportOrHostLayerUsingRegex();
+
+    [GeneratedRegex(@"^using\s+RaftSimulator\.Transport\.Models\b")]
+    private static partial Regex TransportDtoUsingRegex();
+
+    [GeneratedRegex(@"^namespace\s+(?<namespace>[A-Za-z0-9_.]+);$")]
+    private static partial Regex NamespaceRegex();
 }
