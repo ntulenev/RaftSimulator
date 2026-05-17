@@ -218,39 +218,160 @@ public sealed class RaftNodeStateTests
             .WithMessage("Cannot accept a stale heartbeat.");
     }
 
-    [Fact(DisplayName = "State operations reject invalid arguments")]
+    [Fact(DisplayName = "InitializeFollower rejects non-positive timeouts")]
     [Trait("Category", "Unit")]
-    public void StateOperationsRejectInvalidArguments()
+    public void InitializeFollowerRejectsNonPositiveTimeouts()
     {
         // Arrange
         var state = new RaftNodeState();
         var now = TestNow;
 
         // Act
-        Action[] acts =
-        [
-            () => state.InitializeFollower(now, TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-            () => state.InitializeFollower(now, TimeSpan.FromSeconds(1), TimeSpan.Zero),
-            () => state.StartElection(0, now, TimeSpan.FromSeconds(1)),
-            () => state.StartElection(1, now, TimeSpan.Zero),
-            () => state.BecomeLeader(0, 1, now),
-            () => state.BecomeLeader(1, 0, now),
-            () => state.BecomeFollower(-1, null, now, TimeSpan.FromSeconds(1)),
-            () => state.BecomeFollower(1, 0, now, TimeSpan.FromSeconds(1)),
-            () => state.BecomeFollower(1, null, now, TimeSpan.Zero),
-            () => state.TryGrantVote(new RaftVoteRequest(1, 1), now, TimeSpan.Zero),
-            () => state.AcceptHeartbeat(new RaftAppendEntriesRequest(1, 1), now, TimeSpan.Zero),
-            () => _ = state.HasMajority(0),
-            () => state.ScheduleElection(now, TimeSpan.Zero),
-            () => state.ScheduleHeartbeat(now, TimeSpan.Zero),
-            () => state.RegisterHeartbeatAck(0, now)
-        ];
+        var electionAct = () => state.InitializeFollower(now, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        var heartbeatAct = () => state.InitializeFollower(now, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         // Assert
-        foreach (var act in acts)
-        {
-            act.Should().Throw<ArgumentException>();
-        }
+        electionAct.Should().Throw<ArgumentOutOfRangeException>();
+        heartbeatAct.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "StartElection rejects invalid arguments")]
+    [Trait("Category", "Unit")]
+    public void StartElectionRejectsInvalidArguments()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+
+        // Act
+        var nodeAct = () => state.StartElection(0, now, TimeSpan.FromSeconds(1));
+        var timeoutAct = () => state.StartElection(1, now, TimeSpan.Zero);
+
+        // Assert
+        nodeAct.Should().Throw<ArgumentOutOfRangeException>();
+        timeoutAct.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "BecomeLeader rejects invalid arguments")]
+    [Trait("Category", "Unit")]
+    public void BecomeLeaderRejectsInvalidArguments()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+
+        // Act
+        var nodeAct = () => state.BecomeLeader(0, 1, now);
+        var majorityAct = () => state.BecomeLeader(1, 0, now);
+
+        // Assert
+        nodeAct.Should().Throw<ArgumentOutOfRangeException>();
+        majorityAct.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "BecomeFollower rejects invalid arguments")]
+    [Trait("Category", "Unit")]
+    public void BecomeFollowerRejectsInvalidArguments()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+
+        // Act
+        var termAct = () => state.BecomeFollower(-1, null, now, TimeSpan.FromSeconds(1));
+        var leaderAct = () => state.BecomeFollower(1, 0, now, TimeSpan.FromSeconds(1));
+        var timeoutAct = () => state.BecomeFollower(1, null, now, TimeSpan.Zero);
+
+        // Assert
+        termAct.Should().Throw<ArgumentOutOfRangeException>();
+        leaderAct.Should().Throw<ArgumentOutOfRangeException>();
+        timeoutAct.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "TryGrantVote rejects non-positive election timeout")]
+    [Trait("Category", "Unit")]
+    public void TryGrantVoteRejectsNonPositiveElectionTimeout()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+
+        // Act
+        var act = () => state.TryGrantVote(new RaftVoteRequest(1, 1), now, TimeSpan.Zero);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "AcceptHeartbeat rejects non-positive election timeout")]
+    [Trait("Category", "Unit")]
+    public void AcceptHeartbeatRejectsNonPositiveElectionTimeout()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+
+        // Act
+        var act = () => state.AcceptHeartbeat(new RaftAppendEntriesRequest(1, 1), now, TimeSpan.Zero);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "HasMajority rejects invalid majority")]
+    [Trait("Category", "Unit")]
+    public void HasMajorityRejectsInvalidMajority()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+
+        // Act
+        var act = () => state.HasMajority(0);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "ScheduleElection rejects non-positive timeout")]
+    [Trait("Category", "Unit")]
+    public void ScheduleElectionRejectsNonPositiveTimeout()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+
+        // Act
+        var act = () => state.ScheduleElection(TestNow, TimeSpan.Zero);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "ScheduleHeartbeat rejects non-positive interval")]
+    [Trait("Category", "Unit")]
+    public void ScheduleHeartbeatRejectsNonPositiveInterval()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+
+        // Act
+        var act = () => state.ScheduleHeartbeat(TestNow, TimeSpan.Zero);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "RegisterHeartbeatAck rejects invalid peer id")]
+    [Trait("Category", "Unit")]
+    public void RegisterHeartbeatAckRejectsInvalidPeerId()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+
+        // Act
+        var act = () => state.RegisterHeartbeatAck(0, TestNow);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     private static readonly DateTimeOffset TestNow = new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
