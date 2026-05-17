@@ -303,6 +303,20 @@ public sealed class RaftNodeStateTests
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Fact(DisplayName = "TryGrantVote rejects null request")]
+    [Trait("Category", "Unit")]
+    public void TryGrantVoteRejectsNullRequest()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+
+        // Act
+        var act = () => state.TryGrantVote(null!, TestNow, TimeSpan.FromSeconds(1));
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>();
+    }
+
     [Fact(DisplayName = "AcceptHeartbeat rejects non-positive election timeout")]
     [Trait("Category", "Unit")]
     public void AcceptHeartbeatRejectsNonPositiveElectionTimeout()
@@ -316,6 +330,20 @@ public sealed class RaftNodeStateTests
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "AcceptHeartbeat rejects null request")]
+    [Trait("Category", "Unit")]
+    public void AcceptHeartbeatRejectsNullRequest()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+
+        // Act
+        var act = () => state.AcceptHeartbeat(null!, TestNow, TimeSpan.FromSeconds(1));
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>();
     }
 
     [Fact(DisplayName = "HasMajority rejects invalid majority")]

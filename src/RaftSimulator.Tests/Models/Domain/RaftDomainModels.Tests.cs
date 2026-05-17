@@ -180,6 +180,42 @@ public sealed class RaftDomainModelsTests
         response.HasHigherTermThan(new Term(2)).Should().BeFalse();
     }
 
+    [Fact(DisplayName = "Domain decisions expose validated values")]
+    [Trait("Category", "Unit")]
+    public void DomainDecisionsExposeValidatedValues()
+    {
+        // Arrange
+        var voteResponse = new RaftVoteResponse(1, 2, true);
+        var appendResponse = new RaftAppendEntriesResponse(1, 2, true);
+        var raftEvent = new LeaderHeartbeatEvent();
+        var status = new RaftStatus(1, 1, RaftRole.Leader, 1);
+
+        // Act
+        var voteDecision = new VoteDecision(voteResponse, [raftEvent]);
+        var appendDecision = new AppendEntriesDecision(appendResponse, [raftEvent], status);
+        var appendResponseDecision = new AppendEntriesResponseDecision([raftEvent]);
+        var heartbeatResult = new HeartbeatRunResult([appendResponse], [2]);
+        var timeoutAction = new TimeoutAction(TimeoutActionType.Heartbeats, 1, [raftEvent]);
+        var voteResponseDecision = new VoteResponseDecision([raftEvent], true, 1, status);
+
+        // Assert
+        voteDecision.Response.Should().Be(voteResponse);
+        voteDecision.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
+        appendDecision.Response.Should().Be(appendResponse);
+        appendDecision.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
+        appendDecision.StatusSnapshot.Should().Be(status);
+        appendResponseDecision.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
+        heartbeatResult.Responses.Should().ContainSingle().Which.Should().Be(appendResponse);
+        heartbeatResult.AcknowledgedPeerIds.Should().ContainSingle().Which.Should().Be(2);
+        timeoutAction.Type.Should().Be(TimeoutActionType.Heartbeats);
+        timeoutAction.Term.Should().Be(1);
+        timeoutAction.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
+        voteResponseDecision.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
+        voteResponseDecision.BecameLeader.Should().BeTrue();
+        voteResponseDecision.Term.Should().Be(1);
+        voteResponseDecision.StatusSnapshot.Should().Be(status);
+    }
+
     [Fact(DisplayName = "Raft RPC models reject null value objects")]
     [Trait("Category", "Unit")]
     public void RaftRpcModelsRejectNullValueObjects()
@@ -274,7 +310,9 @@ public sealed class RaftDomainModelsTests
             () => _ = appendRequest.ShouldMakeFollower(null!, RaftRole.Follower),
             () => _ = voteResponse.HasHigherTermThan(null!),
             () => _ = voteResponse.IsForTerm(null!),
-            () => _ = appendResponse.HasHigherTermThan(null!)
+            () => _ = appendResponse.HasHigherTermThan(null!),
+            () => _ = Term.Initial.IsOlderThan(null!),
+            () => _ = Term.Initial.IsNewerThan(null!)
         ];
 
         Action[] invalidArgumentActs =
