@@ -41,5 +41,10 @@ internal sealed record RaftAppendEntriesResponse
     /// </summary>
     /// <param name="currentTerm">Current term.</param>
     /// <returns>True when response term is newer.</returns>
-    public bool HasHigherTermThan(Term currentTerm) => Term.IsNewerThan(currentTerm);
+    public bool HasHigherTermThan(Term currentTerm)
+    {
+        ArgumentNullException.ThrowIfNull(currentTerm);
+
+        return Term.IsNewerThan(currentTerm);
+    }
 }

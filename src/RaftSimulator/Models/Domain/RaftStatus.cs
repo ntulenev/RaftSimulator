@@ -17,6 +17,11 @@ internal sealed record RaftStatus
         ArgumentNullException.ThrowIfNull(nodeId);
         ArgumentNullException.ThrowIfNull(term);
 
+        if (!Enum.IsDefined(role))
+        {
+            throw new ArgumentOutOfRangeException(nameof(role), role, "Raft role is not supported.");
+        }
+
         NodeId = nodeId;
         Term = term;
         Role = role;

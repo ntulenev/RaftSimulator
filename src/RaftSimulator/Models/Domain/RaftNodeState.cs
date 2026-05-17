@@ -17,6 +17,9 @@ internal sealed class RaftNodeState
         TimeSpan electionTimeout,
         TimeSpan heartbeatInterval)
     {
+        ValidatePositive(electionTimeout, nameof(electionTimeout));
+        ValidatePositive(heartbeatInterval, nameof(heartbeatInterval));
+
         Role = RaftRole.Follower;
         CurrentTerm = Term.Initial;
         VotedFor = null;
@@ -29,6 +32,9 @@ internal sealed class RaftNodeState
 
     internal void StartElection(int nodeId, DateTimeOffset now, TimeSpan electionTimeout)
     {
+        _ = new NodeId(nodeId);
+        ValidatePositive(electionTimeout, nameof(electionTimeout));
+
         if (Role == RaftRole.Leader)
         {
             throw new InvalidOperationException("Leader cannot start a new election.");
@@ -44,6 +50,13 @@ internal sealed class RaftNodeState
 
     internal void BecomeLeader(int nodeId, int majority, DateTimeOffset now)
     {
+        _ = new NodeId(nodeId);
+
+        if (majority < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(majority), majority, "Majority must be >= 1.");
+        }
+
         if (Role != RaftRole.Candidate)
         {
             throw new InvalidOperationException("Only candidate can become leader.");
@@ -68,6 +81,14 @@ internal sealed class RaftNodeState
         DateTimeOffset now,
         TimeSpan electionTimeout)
     {
+        _ = new Term(term);
+        ValidatePositive(electionTimeout, nameof(electionTimeout));
+
+        if (leaderId is not null)
+        {
+            _ = new LeaderId(leaderId.Value);
+        }
+
         if (term < CurrentTerm.Value)
         {
             throw new InvalidOperationException("Node cannot move to an older term.");
@@ -93,6 +114,7 @@ internal sealed class RaftNodeState
         TimeSpan electionTimeout)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ValidatePositive(electionTimeout, nameof(electionTimeout));
 
         if (request.IsStaleFor(CurrentTerm))
         {
@@ -115,6 +137,7 @@ internal sealed class RaftNodeState
         TimeSpan electionTimeout)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ValidatePositive(electionTimeout, nameof(electionTimeout));
 
         if (request.IsStaleFor(CurrentTerm))
         {
@@ -141,13 +164,27 @@ internal sealed class RaftNodeState
         return VotesReceived;
     }
 
-    internal bool HasMajority(int majority) => VotesReceived >= majority;
+    internal bool HasMajority(int majority)
+    {
+        if (majority < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(majority), majority, "Majority must be >= 1.");
+        }
 
-    internal void ScheduleElection(DateTimeOffset now, TimeSpan electionTimeout) =>
+        return VotesReceived >= majority;
+    }
+
+    internal void ScheduleElection(DateTimeOffset now, TimeSpan electionTimeout)
+    {
+        ValidatePositive(electionTimeout, nameof(electionTimeout));
+
         NextElectionDeadline = now + electionTimeout;
+    }
 
     internal void ScheduleHeartbeat(DateTimeOffset now, TimeSpan heartbeatInterval)
     {
+        ValidatePositive(heartbeatInterval, nameof(heartbeatInterval));
+
         if (Role != RaftRole.Leader)
         {
             throw new InvalidOperationException("Only leader can schedule heartbeats.");
@@ -158,6 +195,8 @@ internal sealed class RaftNodeState
 
     internal void RegisterHeartbeatAck(int peerId, DateTimeOffset now)
     {
+        _ = new FromId(peerId);
+
         if (Role != RaftRole.Leader)
         {
             throw new InvalidOperationException("Only leader can register heartbeat acknowledgements.");
@@ -170,6 +209,14 @@ internal sealed class RaftNodeState
     {
         LeaderSince = default;
         _lastHeartbeatAckAt.Clear();
+    }
+
+    private static void ValidatePositive(TimeSpan value, string parameterName)
+    {
+        if (value <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, value, "Duration must be greater than zero.");
+        }
     }
 
     /// <summary>

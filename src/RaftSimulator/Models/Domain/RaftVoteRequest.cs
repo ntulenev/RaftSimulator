@@ -34,14 +34,24 @@ internal sealed record RaftVoteRequest
     /// </summary>
     /// <param name="currentTerm">Current term.</param>
     /// <returns>True when the request term is older.</returns>
-    public bool IsStaleFor(Term currentTerm) => Term.IsOlderThan(currentTerm);
+    public bool IsStaleFor(Term currentTerm)
+    {
+        ArgumentNullException.ThrowIfNull(currentTerm);
+
+        return Term.IsOlderThan(currentTerm);
+    }
 
     /// <summary>
     /// Determines whether this request advances the current term.
     /// </summary>
     /// <param name="currentTerm">Current term.</param>
     /// <returns>True when the request term is newer.</returns>
-    public bool AdvancesTerm(Term currentTerm) => Term.IsNewerThan(currentTerm);
+    public bool AdvancesTerm(Term currentTerm)
+    {
+        ArgumentNullException.ThrowIfNull(currentTerm);
+
+        return Term.IsNewerThan(currentTerm);
+    }
 
     /// <summary>
     /// Determines whether this request can be granted by the current node state.
@@ -49,6 +59,13 @@ internal sealed record RaftVoteRequest
     /// <param name="role">Current role.</param>
     /// <param name="votedFor">Candidate already voted for in this term.</param>
     /// <returns>True when this vote can be granted.</returns>
-    public bool CanBeGrantedBy(RaftRole role, CandidateId? votedFor) =>
-        role != RaftRole.Leader && (votedFor is null || votedFor == CandidateId);
+    public bool CanBeGrantedBy(RaftRole role, CandidateId? votedFor)
+    {
+        if (!Enum.IsDefined(role))
+        {
+            throw new ArgumentOutOfRangeException(nameof(role), role, "Raft role is not supported.");
+        }
+
+        return role != RaftRole.Leader && (votedFor is null || votedFor == CandidateId);
+    }
 }

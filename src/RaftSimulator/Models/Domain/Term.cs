@@ -35,7 +35,15 @@ internal sealed record Term : IFormattable
     /// Gets the next term.
     /// </summary>
     /// <returns>Next term.</returns>
-    public Term Next() => new(Value + 1);
+    public Term Next()
+    {
+        if (Value == int.MaxValue)
+        {
+            throw new InvalidOperationException("Term cannot advance past int.MaxValue.");
+        }
+
+        return new Term(Value + 1);
+    }
 
     /// <summary>
     /// Determines whether this term is older than another term.

@@ -34,7 +34,12 @@ internal sealed record RaftAppendEntriesRequest
     /// </summary>
     /// <param name="currentTerm">Current term.</param>
     /// <returns>True when the request term is older.</returns>
-    public bool IsStaleFor(Term currentTerm) => Term.IsOlderThan(currentTerm);
+    public bool IsStaleFor(Term currentTerm)
+    {
+        ArgumentNullException.ThrowIfNull(currentTerm);
+
+        return Term.IsOlderThan(currentTerm);
+    }
 
     /// <summary>
     /// Determines whether this request requires the local node to become follower.
@@ -42,6 +47,15 @@ internal sealed record RaftAppendEntriesRequest
     /// <param name="currentTerm">Current term.</param>
     /// <param name="currentRole">Current role.</param>
     /// <returns>True when the request should make this node follow the sender.</returns>
-    public bool ShouldMakeFollower(Term currentTerm, RaftRole currentRole) =>
-        Term.IsNewerThan(currentTerm) || currentRole != RaftRole.Follower;
+    public bool ShouldMakeFollower(Term currentTerm, RaftRole currentRole)
+    {
+        ArgumentNullException.ThrowIfNull(currentTerm);
+
+        if (!Enum.IsDefined(currentRole))
+        {
+            throw new ArgumentOutOfRangeException(nameof(currentRole), currentRole, "Raft role is not supported.");
+        }
+
+        return Term.IsNewerThan(currentTerm) || currentRole != RaftRole.Follower;
+    }
 }
