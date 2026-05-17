@@ -297,7 +297,7 @@ public sealed class RaftNodeStateTests
         var now = TestNow;
 
         // Act
-        var act = () => state.TryGrantVote(new RaftVoteRequest(1, 1), now, TimeSpan.Zero);
+        var act = () => state.TryGrantVote(new RaftVoteRequest(new Term(1), new CandidateId(1)), now, TimeSpan.Zero);
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>();
@@ -326,7 +326,7 @@ public sealed class RaftNodeStateTests
         var now = TestNow;
 
         // Act
-        var act = () => state.AcceptHeartbeat(new RaftAppendEntriesRequest(1, 1), now, TimeSpan.Zero);
+        var act = () => state.AcceptHeartbeat(new RaftAppendEntriesRequest(new Term(1), new LeaderId(1)), now, TimeSpan.Zero);
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>();

@@ -14,7 +14,7 @@ public sealed class PeerRpcResultTests
     {
         // Arrange
         var peer = new PeerInfo(2, new Uri("http://localhost:5002"));
-        var response = new RaftVoteResponse(1, 2, true);
+        var response = new RaftVoteResponse(new Term(1), new FromId(2), true);
 
         // Act
         var result = PeerRpcResult<RaftVoteResponse>.Success(peer, response);

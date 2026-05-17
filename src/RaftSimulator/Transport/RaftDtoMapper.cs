@@ -17,7 +17,7 @@ internal static class RaftDtoMapper
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        return new RaftVoteRequest(dto.Term, dto.CandidateId);
+        return new RaftVoteRequest(new Term(dto.Term), new CandidateId(dto.CandidateId));
     }
 
     /// <summary>
@@ -53,7 +53,7 @@ internal static class RaftDtoMapper
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        return new RaftVoteResponse(dto.Term, dto.FromId, dto.Granted);
+        return new RaftVoteResponse(new Term(dto.Term), new FromId(dto.FromId), dto.Granted);
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ internal static class RaftDtoMapper
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        return new RaftAppendEntriesRequest(dto.Term, dto.LeaderId);
+        return new RaftAppendEntriesRequest(new Term(dto.Term), new LeaderId(dto.LeaderId));
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ internal static class RaftDtoMapper
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        return new RaftAppendEntriesResponse(dto.Term, dto.FromId, dto.Success);
+        return new RaftAppendEntriesResponse(new Term(dto.Term), new FromId(dto.FromId), dto.Success);
     }
 
     /// <summary>

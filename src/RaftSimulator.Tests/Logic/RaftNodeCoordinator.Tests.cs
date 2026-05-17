@@ -63,11 +63,11 @@ public sealed class RaftNodeCoordinatorTests
         var coordinator = CreateInitializedCoordinator(runtime: runtime);
 
         // Act
-        var decision = coordinator.HandleRequestVote(new RaftVoteRequest(2, 2));
+        var decision = coordinator.HandleRequestVote(new RaftVoteRequest(new Term(2), new CandidateId(2)));
         var status = coordinator.GetStatus();
 
         // Assert
-        decision.Response.Should().Be(new RaftVoteResponse(2, 1, true));
+        decision.Response.Should().Be(new RaftVoteResponse(new Term(2), new FromId(1), true));
         status.Term.Should().Be(new Term(2));
         status.Role.Should().Be(RaftRole.Follower);
         runtime.SignalCalls.Should().Be(2);
@@ -81,10 +81,10 @@ public sealed class RaftNodeCoordinatorTests
         var coordinator = CreateInitializedCoordinator();
 
         // Act
-        var decision = coordinator.HandleAppendEntries(new RaftAppendEntriesRequest(2, 2));
+        var decision = coordinator.HandleAppendEntries(new RaftAppendEntriesRequest(new Term(2), new LeaderId(2)));
 
         // Assert
-        decision.Response.Should().Be(new RaftAppendEntriesResponse(2, 1, true));
+        decision.Response.Should().Be(new RaftAppendEntriesResponse(new Term(2), new FromId(1), true));
         decision.StatusSnapshot.Should().NotBeNull();
         coordinator.GetStatus().LeaderId.Should().Be(new LeaderId(2));
     }
@@ -115,11 +115,11 @@ public sealed class RaftNodeCoordinatorTests
         var timeout = coordinator.PrepareTimeoutAction();
 
         // Act
-        var voteDecision = coordinator.HandleVoteResponse(new RaftVoteResponse(timeout.Term, 2, true));
+        var voteDecision = coordinator.HandleVoteResponse(new RaftVoteResponse(timeout.Term, new FromId(2), true));
         var status = coordinator.GetStatus();
         clock.Advance(TimeSpan.FromSeconds(3));
         var beforeAck = coordinator.BuildQuorumEvent(TimeSpan.FromSeconds(2));
-        coordinator.RegisterHeartbeatAck(2);
+        coordinator.RegisterHeartbeatAck(new FromId(2));
         var afterAck = coordinator.BuildQuorumEvent(TimeSpan.FromSeconds(2));
 
         // Assert
@@ -136,10 +136,10 @@ public sealed class RaftNodeCoordinatorTests
         // Arrange
         var coordinator = CreateInitializedCoordinator();
         var timeout = coordinator.PrepareTimeoutAction();
-        _ = coordinator.HandleVoteResponse(new RaftVoteResponse(timeout.Term, 2, true));
+        _ = coordinator.HandleVoteResponse(new RaftVoteResponse(timeout.Term, new FromId(2), true));
 
         // Act
-        var decision = coordinator.HandleAppendEntriesResponse(new RaftAppendEntriesResponse(2, 2, true));
+        var decision = coordinator.HandleAppendEntriesResponse(new RaftAppendEntriesResponse(new Term(2), new FromId(2), true));
 
         // Assert
         decision.Events.Should().HaveCount(2);

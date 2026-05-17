@@ -13,8 +13,8 @@ public sealed class RaftDtoMapperTests
     public void VoteMappingPreservesValues()
     {
         // Arrange
-        var request = new RaftVoteRequest(2, 3);
-        var response = new RaftVoteResponse(2, 4, true);
+        var request = new RaftVoteRequest(new Term(2), new CandidateId(3));
+        var response = new RaftVoteResponse(new Term(2), new FromId(4), true);
 
         // Act
         var requestDto = RaftDtoMapper.ToDto(request);
@@ -32,8 +32,8 @@ public sealed class RaftDtoMapperTests
     public void AppendEntriesMappingPreservesValues()
     {
         // Arrange
-        var request = new RaftAppendEntriesRequest(5, 1);
-        var response = new RaftAppendEntriesResponse(5, 2, true);
+        var request = new RaftAppendEntriesRequest(new Term(5), new LeaderId(1));
+        var response = new RaftAppendEntriesResponse(new Term(5), new FromId(2), true);
 
         // Act
         var requestDto = RaftDtoMapper.ToDto(request);
@@ -51,7 +51,7 @@ public sealed class RaftDtoMapperTests
     public void StatusMappingUsesRoleString()
     {
         // Arrange
-        var status = new RaftStatus(1, 2, RaftRole.Follower, null);
+        var status = new RaftStatus(new NodeId(1), new Term(2), RaftRole.Follower, null);
 
         // Act
         var dto = RaftDtoMapper.ToDto(status);

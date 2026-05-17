@@ -12,13 +12,13 @@ public sealed class RaftDomainModelsTests
     public void VoteModelsExposeValuesAndEquality()
     {
         // Act
-        var request = new RaftVoteRequest(3, 2);
-        var response = new RaftVoteResponse(3, 2, true);
+        var request = new RaftVoteRequest(new Term(3), new CandidateId(2));
+        var response = new RaftVoteResponse(new Term(3), new FromId(2), true);
 
         // Assert
         request.Term.Should().Be(new Term(3));
         request.CandidateId.Should().Be(new CandidateId(2));
-        request.Should().Be(new RaftVoteRequest(3, 2));
+        request.Should().Be(new RaftVoteRequest(new Term(3), new CandidateId(2)));
         response.FromId.Should().Be(new FromId(2));
         response.Granted.Should().BeTrue();
     }
@@ -28,8 +28,8 @@ public sealed class RaftDomainModelsTests
     public void AppendEntriesModelsExposeValues()
     {
         // Act
-        var request = new RaftAppendEntriesRequest(4, 1);
-        var response = new RaftAppendEntriesResponse(4, 2, true);
+        var request = new RaftAppendEntriesRequest(new Term(4), new LeaderId(1));
+        var response = new RaftAppendEntriesResponse(new Term(4), new FromId(2), true);
 
         // Assert
         request.Term.Should().Be(new Term(4));
@@ -43,7 +43,7 @@ public sealed class RaftDomainModelsTests
     public void StatusModelExposesValues()
     {
         // Act
-        var status = new RaftStatus(1, 5, RaftRole.Leader, 1);
+        var status = new RaftStatus(new NodeId(1), new Term(5), RaftRole.Leader, new LeaderId(1));
 
         // Assert
         status.NodeId.Should().Be(new NodeId(1));
@@ -130,7 +130,7 @@ public sealed class RaftDomainModelsTests
     public void VoteRequestEvaluatesGrantRules()
     {
         // Arrange
-        var request = new RaftVoteRequest(2, 3);
+        var request = new RaftVoteRequest(new Term(2), new CandidateId(3));
 
         // Assert
         request.IsStaleFor(new Term(3)).Should().BeTrue();
@@ -146,7 +146,7 @@ public sealed class RaftDomainModelsTests
     public void VoteResponseEvaluatesTermRelation()
     {
         // Arrange
-        var response = new RaftVoteResponse(2, 3, true);
+        var response = new RaftVoteResponse(new Term(2), new FromId(3), true);
 
         // Assert
         response.HasHigherTermThan(new Term(1)).Should().BeTrue();
@@ -159,7 +159,7 @@ public sealed class RaftDomainModelsTests
     public void AppendEntriesRequestEvaluatesFollowerTransitionRules()
     {
         // Arrange
-        var request = new RaftAppendEntriesRequest(2, 1);
+        var request = new RaftAppendEntriesRequest(new Term(2), new LeaderId(1));
 
         // Assert
         request.IsStaleFor(new Term(3)).Should().BeTrue();
@@ -173,7 +173,7 @@ public sealed class RaftDomainModelsTests
     public void AppendEntriesResponseEvaluatesTermRelation()
     {
         // Arrange
-        var response = new RaftAppendEntriesResponse(2, 3, true);
+        var response = new RaftAppendEntriesResponse(new Term(2), new FromId(3), true);
 
         // Assert
         response.HasHigherTermThan(new Term(1)).Should().BeTrue();
@@ -185,18 +185,18 @@ public sealed class RaftDomainModelsTests
     public void DomainDecisionsExposeValidatedValues()
     {
         // Arrange
-        var voteResponse = new RaftVoteResponse(1, 2, true);
-        var appendResponse = new RaftAppendEntriesResponse(1, 2, true);
+        var voteResponse = new RaftVoteResponse(new Term(1), new FromId(2), true);
+        var appendResponse = new RaftAppendEntriesResponse(new Term(1), new FromId(2), true);
         var raftEvent = new LeaderHeartbeatEvent();
-        var status = new RaftStatus(1, 1, RaftRole.Leader, 1);
+        var status = new RaftStatus(new NodeId(1), new Term(1), RaftRole.Leader, new LeaderId(1));
 
         // Act
         var voteDecision = new VoteDecision(voteResponse, [raftEvent]);
         var appendDecision = new AppendEntriesDecision(appendResponse, [raftEvent], status);
         var appendResponseDecision = new AppendEntriesResponseDecision([raftEvent]);
         var heartbeatResult = new HeartbeatRunResult([appendResponse], [2]);
-        var timeoutAction = new TimeoutAction(TimeoutActionType.Heartbeats, 1, [raftEvent]);
-        var voteResponseDecision = new VoteResponseDecision([raftEvent], true, 1, status);
+        var timeoutAction = new TimeoutAction(TimeoutActionType.Heartbeats, new Term(1), [raftEvent]);
+        var voteResponseDecision = new VoteResponseDecision([raftEvent], true, new Term(1), status);
 
         // Assert
         voteDecision.Response.Should().Be(voteResponse);
@@ -223,16 +223,16 @@ public sealed class RaftDomainModelsTests
         // Act
         Action[] acts =
         [
-            () => _ = new RaftVoteRequest(null!, 1),
-            () => _ = new RaftVoteRequest(1, null!),
-            () => _ = new RaftVoteResponse(null!, 1, true),
-            () => _ = new RaftVoteResponse(1, null!, true),
-            () => _ = new RaftAppendEntriesRequest(null!, 1),
-            () => _ = new RaftAppendEntriesRequest(1, null!),
-            () => _ = new RaftAppendEntriesResponse(null!, 1, true),
-            () => _ = new RaftAppendEntriesResponse(1, null!, true),
-            () => _ = new RaftStatus(null!, 1, RaftRole.Follower, null),
-            () => _ = new RaftStatus(1, null!, RaftRole.Follower, null)
+            () => _ = new RaftVoteRequest(null!, new CandidateId(1)),
+            () => _ = new RaftVoteRequest(new Term(1), null!),
+            () => _ = new RaftVoteResponse(null!, new FromId(1), true),
+            () => _ = new RaftVoteResponse(new Term(1), null!, true),
+            () => _ = new RaftAppendEntriesRequest(null!, new LeaderId(1)),
+            () => _ = new RaftAppendEntriesRequest(new Term(1), null!),
+            () => _ = new RaftAppendEntriesResponse(null!, new FromId(1), true),
+            () => _ = new RaftAppendEntriesResponse(new Term(1), null!, true),
+            () => _ = new RaftStatus(null!, new Term(1), RaftRole.Follower, null),
+            () => _ = new RaftStatus(new NodeId(1), null!, RaftRole.Follower, null)
         ];
 
         // Assert
@@ -247,8 +247,8 @@ public sealed class RaftDomainModelsTests
     public void DomainDecisionsRejectInvalidConstructorArguments()
     {
         // Arrange
-        var response = new RaftVoteResponse(1, 2, true);
-        var appendResponse = new RaftAppendEntriesResponse(1, 2, true);
+        var response = new RaftVoteResponse(new Term(1), new FromId(2), true);
+        var appendResponse = new RaftAppendEntriesResponse(new Term(1), new FromId(2), true);
         var raftEvent = new LeaderHeartbeatEvent();
 
         // Act
@@ -262,8 +262,8 @@ public sealed class RaftDomainModelsTests
             () => _ = new HeartbeatRunResult(null!, []),
             () => _ = new HeartbeatRunResult([], null!),
             () => _ = new TimeoutAction(TimeoutActionType.Election, null!, []),
-            () => _ = new TimeoutAction(TimeoutActionType.Election, 1, null!),
-            () => _ = new VoteResponseDecision(null!, false, 1, null),
+            () => _ = new TimeoutAction(TimeoutActionType.Election, new Term(1), null!),
+            () => _ = new VoteResponseDecision(null!, false, new Term(1), null),
             () => _ = new VoteResponseDecision([], false, null!, null)
         ];
 
@@ -274,10 +274,10 @@ public sealed class RaftDomainModelsTests
             () => _ = new AppendEntriesResponseDecision([null!]),
             () => _ = new HeartbeatRunResult([null!], []),
             () => _ = new HeartbeatRunResult([], [0]),
-            () => _ = new TimeoutAction((TimeoutActionType)99, 1, [raftEvent]),
-            () => _ = new TimeoutAction(TimeoutActionType.Election, 1, [null!]),
-            () => _ = new VoteResponseDecision([null!], false, 1, null),
-            () => _ = new VoteResponseDecision([], false, -1, null)
+            () => _ = new TimeoutAction((TimeoutActionType)99, new Term(1), [raftEvent]),
+            () => _ = new TimeoutAction(TimeoutActionType.Election, new Term(1), [null!]),
+            () => _ = new VoteResponseDecision([null!], false, new Term(1), null),
+            () => _ = new VoteResponseDecision([], false, new Term(-1), null)
         ];
 
         // Assert
@@ -297,10 +297,10 @@ public sealed class RaftDomainModelsTests
     public void DomainMethodsRejectInvalidArguments()
     {
         // Arrange
-        var voteRequest = new RaftVoteRequest(1, 2);
-        var appendRequest = new RaftAppendEntriesRequest(1, 2);
-        var voteResponse = new RaftVoteResponse(1, 2, true);
-        var appendResponse = new RaftAppendEntriesResponse(1, 2, true);
+        var voteRequest = new RaftVoteRequest(new Term(1), new CandidateId(2));
+        var appendRequest = new RaftAppendEntriesRequest(new Term(1), new LeaderId(2));
+        var voteResponse = new RaftVoteResponse(new Term(1), new FromId(2), true);
+        var appendResponse = new RaftAppendEntriesResponse(new Term(1), new FromId(2), true);
 
         // Act
         Action[] nullActs =
@@ -319,8 +319,8 @@ public sealed class RaftDomainModelsTests
         Action[] invalidArgumentActs =
         [
             () => _ = voteRequest.CanBeGrantedBy((RaftRole)99, null),
-            () => _ = appendRequest.ShouldMakeFollower(1, (RaftRole)99),
-            () => _ = new RaftStatus(1, 1, (RaftRole)99, null)
+            () => _ = appendRequest.ShouldMakeFollower(new Term(1), (RaftRole)99),
+            () => _ = new RaftStatus(new NodeId(1), new Term(1), (RaftRole)99, null)
         ];
 
         var invalidOperationAct = () => new Term(int.MaxValue).Next();

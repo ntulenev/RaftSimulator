@@ -26,7 +26,7 @@ public sealed class RaftPeerClientTests
 
         // Act
         var response = await client
-            .RequestVoteAsync(peer, new RaftVoteRequest(1, 1), CancellationToken.None);
+            .RequestVoteAsync(peer, new RaftVoteRequest(new Term(1), new CandidateId(1)), CancellationToken.None);
 
         // Assert
         response.Should().BeNull();
@@ -45,10 +45,10 @@ public sealed class RaftPeerClientTests
 
         // Act
         var response = await client
-            .RequestVoteAsync(peer, new RaftVoteRequest(2, 1), CancellationToken.None);
+            .RequestVoteAsync(peer, new RaftVoteRequest(new Term(2), new CandidateId(1)), CancellationToken.None);
 
         // Assert
-        response.Should().Be(new RaftVoteResponse(2, 3, true));
+        response.Should().Be(new RaftVoteResponse(new Term(2), new FromId(3), true));
         handler.LastRequest?.RequestUri.Should().Be(peer.RequestVoteUrl);
     }
 
@@ -65,10 +65,10 @@ public sealed class RaftPeerClientTests
 
         // Act
         var response = await client
-            .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(3, 1), CancellationToken.None);
+            .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(new Term(3), new LeaderId(1)), CancellationToken.None);
 
         // Assert
-        response.Should().Be(new RaftAppendEntriesResponse(3, 2, true));
+        response.Should().Be(new RaftAppendEntriesResponse(new Term(3), new FromId(2), true));
         handler.LastRequest?.RequestUri.Should().Be(peer.AppendEntriesUrl);
     }
 
@@ -85,7 +85,7 @@ public sealed class RaftPeerClientTests
 
         // Act
         var response = await client
-            .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(1, 1), CancellationToken.None);
+            .AppendEntriesAsync(peer, new RaftAppendEntriesRequest(new Term(1), new LeaderId(1)), CancellationToken.None);
 
         // Assert
         response.Should().BeNull();
@@ -108,10 +108,10 @@ public sealed class RaftPeerClientTests
 
         // Act
         object? response = rpcName == "request-vote"
-            ? await client.RequestVoteAsync(peer, new RaftVoteRequest(1, 1), CancellationToken.None)
+            ? await client.RequestVoteAsync(peer, new RaftVoteRequest(new Term(1), new CandidateId(1)), CancellationToken.None)
             : await client.AppendEntriesAsync(
                 peer,
-                new RaftAppendEntriesRequest(1, 1),
+                new RaftAppendEntriesRequest(new Term(1), new LeaderId(1)),
                 CancellationToken.None);
 
         // Assert

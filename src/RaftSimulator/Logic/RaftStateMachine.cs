@@ -59,7 +59,7 @@ internal sealed class RaftStateMachine
 
         if (request.IsStaleFor(State.CurrentTerm))
         {
-            response = new RaftVoteResponse(State.CurrentTerm, Id, false);
+            response = new RaftVoteResponse(State.CurrentTerm, new FromId(Id), false);
             events.Add(new RequestVoteDeniedEvent(request.CandidateId, request.Term));
         }
         else
@@ -71,7 +71,7 @@ internal sealed class RaftStateMachine
 
             var canVote = State.TryGrantVote(request, now, electionTimeout);
 
-            response = new RaftVoteResponse(State.CurrentTerm, Id, canVote);
+            response = new RaftVoteResponse(State.CurrentTerm, new FromId(Id), canVote);
             events.Add(canVote
                 ? new RequestVoteGrantedEvent(request.CandidateId, State.CurrentTerm)
                 : new RequestVoteDeniedEvent(request.CandidateId, State.CurrentTerm));
@@ -100,7 +100,7 @@ internal sealed class RaftStateMachine
 
         if (request.IsStaleFor(State.CurrentTerm))
         {
-            response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, false);
+            response = new RaftAppendEntriesResponse(State.CurrentTerm, new FromId(Id), false);
             events.Add(new HeartbeatIgnoredEvent(request.LeaderId, request.Term));
         }
         else
@@ -116,7 +116,7 @@ internal sealed class RaftStateMachine
 
             State.AcceptHeartbeat(request, now, electionTimeout);
 
-            response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, true);
+            response = new RaftAppendEntriesResponse(State.CurrentTerm, new FromId(Id), true);
             events.Add(new HeartbeatReceivedEvent(request.LeaderId, State.CurrentTerm));
 
             statusSnapshot = _statusReporter.GetSnapshotToPublish(GetStatus());
@@ -288,7 +288,7 @@ internal sealed class RaftStateMachine
     /// </summary>
     /// <returns>Status snapshot.</returns>
     public RaftStatus GetStatus() =>
-        new(Id, State.CurrentTerm, State.Role, State.LeaderId);
+        new(new NodeId(Id), State.CurrentTerm, State.Role, State.LeaderId);
 
     private BecameFollowerEvent BecomeFollower(
         int term,

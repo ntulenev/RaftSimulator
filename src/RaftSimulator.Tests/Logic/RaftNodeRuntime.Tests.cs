@@ -36,11 +36,11 @@ public sealed class RaftNodeRuntimeTests
 
         // Act
         var response = await scenario.Node.OnRequestVoteAsync(
-            new RaftVoteRequest(2, 2),
+            new RaftVoteRequest(new Term(2), new CandidateId(2)),
             CancellationToken.None);
 
         // Assert
-        response.Should().Be(new RaftVoteResponse(2, 1, true));
+        response.Should().Be(new RaftVoteResponse(new Term(2), new FromId(1), true));
         scenario.EventLog.Events.Should().Contain(item => item.Event is RequestVoteGrantedEvent);
         scenario.Node.GetStatus().Term.Should().Be(new Term(2));
     }
@@ -54,11 +54,11 @@ public sealed class RaftNodeRuntimeTests
 
         // Act
         var response = await scenario.Node.OnAppendEntriesAsync(
-            new RaftAppendEntriesRequest(3, 2),
+            new RaftAppendEntriesRequest(new Term(3), new LeaderId(2)),
             CancellationToken.None);
 
         // Assert
-        response.Should().Be(new RaftAppendEntriesResponse(3, 1, true));
+        response.Should().Be(new RaftAppendEntriesResponse(new Term(3), new FromId(1), true));
         scenario.EventLog.Events.Should().Contain(item => item.Event is HeartbeatReceivedEvent);
         scenario.Log.Statuses.Should().ContainSingle().Which.LeaderId.Should().Be(new LeaderId(2));
     }
@@ -115,7 +115,7 @@ public sealed class RaftNodeRuntimeTests
         {
             VoteResults =
             [
-                new RaftVoteResponse(1, settings.Peers[0].Id, true)
+                new RaftVoteResponse(new Term(1), new FromId(settings.Peers[0].Id), true)
             ]
         };
         var node = new RaftNode(
@@ -220,14 +220,14 @@ public sealed class RaftNodeRuntimeTests
         public RuntimeScenario GrantVoteFromFirstPeer()
         {
             var peerId = Settings.Peers[0].Id;
-            ElectionRunner.VoteResults = [new RaftVoteResponse(1, peerId, true)];
+            ElectionRunner.VoteResults = [new RaftVoteResponse(new Term(1), new FromId(peerId), true)];
             return this;
         }
 
         public RuntimeScenario AckHeartbeatFromFirstPeer()
         {
             var peerId = Settings.Peers[0].Id;
-            HeartbeatRunner.Responses = [new RaftAppendEntriesResponse(1, peerId, true)];
+            HeartbeatRunner.Responses = [new RaftAppendEntriesResponse(new Term(1), new FromId(peerId), true)];
             HeartbeatRunner.AckPeerIds = [peerId];
             return this;
         }
@@ -242,7 +242,7 @@ public sealed class RaftNodeRuntimeTests
         {
             HeartbeatRunner.Responses =
             [
-                new RaftAppendEntriesResponse(2, Settings.Peers[0].Id, true)
+                new RaftAppendEntriesResponse(new Term(2), new FromId(Settings.Peers[0].Id), true)
             ];
             return this;
         }

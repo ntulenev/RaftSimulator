@@ -15,7 +15,7 @@ public sealed class RaftElectionRunnerTests
     {
         // Arrange
         var peer = CreatePeer(2);
-        var response = new RaftVoteResponse(3, 2, true);
+        var response = new RaftVoteResponse(new Term(3), new FromId(2), true);
         var broadcaster = new TestBroadcaster
         {
             VoteResults = [PeerRpcResult<RaftVoteResponse>.Success(peer, response)]
@@ -26,8 +26,8 @@ public sealed class RaftElectionRunnerTests
 
         // Act
         await runner.StartElectionAsync(
-            3,
-            1,
+            new Term(3),
+            new CandidateId(1),
             (voteResponse, _) =>
             {
                 handled.Add(voteResponse);
@@ -59,8 +59,8 @@ public sealed class RaftElectionRunnerTests
 
         // Act
         await runner.StartElectionAsync(
-            3,
-            1,
+            new Term(3),
+            new CandidateId(1),
             (_, _) =>
             {
                 handledResponses++;
@@ -91,8 +91,8 @@ public sealed class RaftElectionRunnerTests
 
         // Act
         await runner.StartElectionAsync(
-            3,
-            1,
+            new Term(3),
+            new CandidateId(1),
             (_, _) => Task.CompletedTask,
             CancellationToken.None);
 
@@ -119,8 +119,8 @@ public sealed class RaftElectionRunnerTests
 
         // Act
         await runner.StartElectionAsync(
-            3,
-            1,
+            new Term(3),
+            new CandidateId(1),
             (_, _) => Task.CompletedTask,
             CancellationToken.None);
 
@@ -138,11 +138,11 @@ public sealed class RaftElectionRunnerTests
         // Act
         Func<Task> nullTermAct = () => runner.StartElectionAsync(
             null!,
-            1,
+            new CandidateId(1),
             (_, _) => Task.CompletedTask,
             CancellationToken.None);
         Func<Task> nullCandidateAct = () => runner.StartElectionAsync(
-            1,
+            new Term(1),
             null!,
             (_, _) => Task.CompletedTask,
             CancellationToken.None);

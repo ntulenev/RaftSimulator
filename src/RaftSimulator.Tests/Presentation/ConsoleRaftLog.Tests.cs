@@ -44,7 +44,7 @@ public sealed class ConsoleRaftLogTests
         try
         {
             // Act
-            log.WriteNodeStatus(new RaftStatus(1, 2, RaftRole.Leader, 1));
+            log.WriteNodeStatus(new RaftStatus(new NodeId(1), new Term(2), RaftRole.Leader, new LeaderId(1)));
 
             // Assert
             var output = writer.ToString();

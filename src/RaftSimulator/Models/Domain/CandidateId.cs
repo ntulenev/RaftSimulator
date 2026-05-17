@@ -27,10 +27,4 @@ internal sealed record CandidateId : IFormattable
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) =>
         Value.ToString(format, formatProvider);
-
-    /// <summary>
-    /// Converts an integer to a candidate identifier value object.
-    /// </summary>
-    /// <param name="value">Integer value.</param>
-    public static implicit operator CandidateId(int value) => new(value);
 }

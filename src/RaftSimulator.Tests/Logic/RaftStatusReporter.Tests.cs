@@ -15,7 +15,7 @@ public sealed class RaftStatusReporterTests
         var reporter = new RaftStatusReporter();
 
         // Act
-        var snapshot = reporter.GetSnapshotToPublish(new RaftStatus(1, 1, RaftRole.Follower, null));
+        var snapshot = reporter.GetSnapshotToPublish(new RaftStatus(new NodeId(1), new Term(1), RaftRole.Follower, null));
 
         // Assert
         snapshot.Should().BeNull();
@@ -27,7 +27,7 @@ public sealed class RaftStatusReporterTests
     {
         // Arrange
         var reporter = new RaftStatusReporter();
-        var status = new RaftStatus(1, 1, RaftRole.Leader, 1);
+        var status = new RaftStatus(new NodeId(1), new Term(1), RaftRole.Leader, new LeaderId(1));
 
         // Act
         var first = reporter.GetSnapshotToPublish(status);
@@ -44,7 +44,7 @@ public sealed class RaftStatusReporterTests
     {
         // Arrange
         var reporter = new RaftStatusReporter();
-        var status = new RaftStatus(1, 1, RaftRole.Leader, 1);
+        var status = new RaftStatus(new NodeId(1), new Term(1), RaftRole.Leader, new LeaderId(1));
         _ = reporter.GetSnapshotToPublish(status);
 
         // Act

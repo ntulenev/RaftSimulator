@@ -19,8 +19,8 @@ public sealed class RaftHeartbeatRunnerTests
 
         // Act
         _ = await runner.SendHeartbeatsAsync(
-            4,
-            1,
+            new Term(4),
+            new LeaderId(1),
             CancellationToken.None);
 
         // Assert
@@ -35,7 +35,7 @@ public sealed class RaftHeartbeatRunnerTests
     {
         // Arrange
         var peer = CreatePeer(2);
-        var response = new RaftAppendEntriesResponse(4, 2, true);
+        var response = new RaftAppendEntriesResponse(new Term(4), new FromId(2), true);
         var broadcaster = new TestBroadcaster
         {
             HeartbeatResults =
@@ -48,8 +48,8 @@ public sealed class RaftHeartbeatRunnerTests
 
         // Act
         var result = await runner.SendHeartbeatsAsync(
-            4,
-            1,
+            new Term(4),
+            new LeaderId(1),
             CancellationToken.None);
 
         // Assert
@@ -76,8 +76,8 @@ public sealed class RaftHeartbeatRunnerTests
 
         // Act
         var result = await runner.SendHeartbeatsAsync(
-            4,
-            1,
+            new Term(4),
+            new LeaderId(1),
             CancellationToken.None);
 
         // Assert
@@ -106,8 +106,8 @@ public sealed class RaftHeartbeatRunnerTests
 
         // Act
         _ = await runner.SendHeartbeatsAsync(
-            4,
-            1,
+            new Term(4),
+            new LeaderId(1),
             CancellationToken.None);
 
         // Assert
@@ -135,8 +135,8 @@ public sealed class RaftHeartbeatRunnerTests
 
         // Act
         _ = await runner.SendHeartbeatsAsync(
-            4,
-            1,
+            new Term(4),
+            new LeaderId(1),
             CancellationToken.None);
 
         // Assert
@@ -151,8 +151,8 @@ public sealed class RaftHeartbeatRunnerTests
         var runner = new RaftHeartbeatRunner(new TestBroadcaster(), new TestRaftLog());
 
         // Act
-        Func<Task> nullTermAct = () => runner.SendHeartbeatsAsync(null!, 1, CancellationToken.None);
-        Func<Task> nullLeaderAct = () => runner.SendHeartbeatsAsync(1, null!, CancellationToken.None);
+        Func<Task> nullTermAct = () => runner.SendHeartbeatsAsync(null!, new LeaderId(1), CancellationToken.None);
+        Func<Task> nullLeaderAct = () => runner.SendHeartbeatsAsync(new Term(1), null!, CancellationToken.None);
 
         // Assert
         await nullTermAct.Should().ThrowAsync<ArgumentNullException>();

@@ -27,10 +27,4 @@ internal sealed record LeaderId : IFormattable
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) =>
         Value.ToString(format, formatProvider);
-
-    /// <summary>
-    /// Converts an integer to a leader identifier value object.
-    /// </summary>
-    /// <param name="value">Integer value.</param>
-    public static implicit operator LeaderId(int value) => new(value);
 }

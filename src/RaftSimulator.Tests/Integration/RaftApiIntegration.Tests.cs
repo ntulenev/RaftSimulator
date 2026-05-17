@@ -27,7 +27,7 @@ public sealed class RaftApiIntegrationTests
         // Arrange
         var node = new TestRaftNode
         {
-            VoteResponse = new RaftVoteResponse(2, 5, true)
+            VoteResponse = new RaftVoteResponse(new Term(2), new FromId(5), true)
         };
         await using var factory = new RaftApiFactory(node);
         using var client = factory.CreateClient();
@@ -55,7 +55,7 @@ public sealed class RaftApiIntegrationTests
         // Arrange
         var node = new TestRaftNode
         {
-            AppendEntriesResponse = new RaftAppendEntriesResponse(3, 4, true)
+            AppendEntriesResponse = new RaftAppendEntriesResponse(new Term(3), new FromId(4), true)
         };
         await using var factory = new RaftApiFactory(node);
         using var client = factory.CreateClient();
@@ -83,7 +83,7 @@ public sealed class RaftApiIntegrationTests
         // Arrange
         var node = new TestRaftNode
         {
-            Status = new RaftStatus(1, 4, RaftRole.Leader, 1)
+            Status = new RaftStatus(new NodeId(1), new Term(4), RaftRole.Leader, new LeaderId(1))
         };
         await using var factory = new RaftApiFactory(node);
         using var client = factory.CreateClient();
@@ -176,11 +176,14 @@ public sealed class RaftApiIntegrationTests
         public IReadOnlyCollection<RaftAppendEntriesRequest> AppendEntriesRequests =>
             _appendEntriesRequests;
 
-        public RaftVoteResponse VoteResponse { get; init; } = new(1, 1, true);
+        public RaftVoteResponse VoteResponse { get; init; } =
+            new(new Term(1), new FromId(1), true);
 
-        public RaftAppendEntriesResponse AppendEntriesResponse { get; init; } = new(1, 1, true);
+        public RaftAppendEntriesResponse AppendEntriesResponse { get; init; } =
+            new(new Term(1), new FromId(1), true);
 
-        public RaftStatus Status { get; init; } = new(1, 1, RaftRole.Follower, null);
+        public RaftStatus Status { get; init; } =
+            new(new NodeId(1), new Term(1), RaftRole.Follower, null);
 
         public int Id => 1;
 

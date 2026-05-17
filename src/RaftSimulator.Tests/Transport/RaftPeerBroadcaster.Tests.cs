@@ -24,7 +24,7 @@ public sealed class RaftPeerBroadcasterTests
                 It.IsAny<RaftVoteRequest>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((PeerInfo peer, RaftVoteRequest request, CancellationToken _) =>
-                new RaftVoteResponse(request.Term, peer.Id, true));
+                new RaftVoteResponse(request.Term, new FromId(peer.Id), true));
 
         var broadcaster = new RaftPeerBroadcaster(
             settings,
@@ -32,7 +32,7 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.RequestVotesAsync(2, 1, CancellationToken.None);
+        var results = await broadcaster.RequestVotesAsync(new Term(2), new CandidateId(1), CancellationToken.None);
 
         // Assert
         results.Should().HaveCount(2);
@@ -60,7 +60,7 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.SendHeartbeatsAsync(3, 1, CancellationToken.None);
+        var results = await broadcaster.SendHeartbeatsAsync(new Term(3), new LeaderId(1), CancellationToken.None);
 
         // Assert
         results.Should().HaveCount(2);
@@ -87,7 +87,7 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.RequestVotesAsync(2, 1, CancellationToken.None);
+        var results = await broadcaster.RequestVotesAsync(new Term(2), new CandidateId(1), CancellationToken.None);
 
         // Assert
         results.Should().HaveCount(2);
@@ -115,7 +115,7 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.RequestVotesAsync(2, 1, CancellationToken.None);
+        var results = await broadcaster.RequestVotesAsync(new Term(2), new CandidateId(1), CancellationToken.None);
 
         // Assert
         results.Should().HaveCount(2);
@@ -143,7 +143,7 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.SendHeartbeatsAsync(2, 1, CancellationToken.None);
+        var results = await broadcaster.SendHeartbeatsAsync(new Term(2), new LeaderId(1), CancellationToken.None);
 
         // Assert
         results.Should().HaveCount(2);
@@ -173,7 +173,7 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.RequestVotesAsync(2, 1, source.Token);
+        var results = await broadcaster.RequestVotesAsync(new Term(2), new CandidateId(1), source.Token);
 
         // Assert
         results.Should().HaveCount(2);
@@ -191,8 +191,8 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        Func<Task> nullTermAct = () => broadcaster.RequestVotesAsync(null!, 1, CancellationToken.None);
-        Func<Task> nullCandidateAct = () => broadcaster.RequestVotesAsync(1, null!, CancellationToken.None);
+        Func<Task> nullTermAct = () => broadcaster.RequestVotesAsync(null!, new CandidateId(1), CancellationToken.None);
+        Func<Task> nullCandidateAct = () => broadcaster.RequestVotesAsync(new Term(1), null!, CancellationToken.None);
 
         // Assert
         await nullTermAct.Should().ThrowAsync<ArgumentNullException>();
@@ -210,8 +210,8 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        Func<Task> nullTermAct = () => broadcaster.SendHeartbeatsAsync(null!, 1, CancellationToken.None);
-        Func<Task> nullLeaderAct = () => broadcaster.SendHeartbeatsAsync(1, null!, CancellationToken.None);
+        Func<Task> nullTermAct = () => broadcaster.SendHeartbeatsAsync(null!, new LeaderId(1), CancellationToken.None);
+        Func<Task> nullLeaderAct = () => broadcaster.SendHeartbeatsAsync(new Term(1), null!, CancellationToken.None);
 
         // Assert
         await nullTermAct.Should().ThrowAsync<ArgumentNullException>();

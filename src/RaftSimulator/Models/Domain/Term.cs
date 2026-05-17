@@ -70,10 +70,4 @@ internal sealed record Term : IFormattable
     /// <inheritdoc />
     public string ToString(string? format, IFormatProvider? formatProvider) =>
         Value.ToString(format, formatProvider);
-
-    /// <summary>
-    /// Converts an integer to a term value object.
-    /// </summary>
-    /// <param name="value">Integer value.</param>
-    public static implicit operator Term(int value) => new(value);
 }

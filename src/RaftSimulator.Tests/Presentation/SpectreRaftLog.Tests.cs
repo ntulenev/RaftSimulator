@@ -73,7 +73,7 @@ public sealed class SpectreRaftLogTests
             log.WriteSystem($"line-{index:000}");
         }
 
-        log.WriteNodeStatus(new RaftStatus(1, 1, RaftRole.Follower, null));
+        log.WriteNodeStatus(new RaftStatus(new NodeId(1), new Term(1), RaftRole.Follower, null));
 
         // Assert
         console.Output.Should().Contain("line-200");
@@ -104,7 +104,7 @@ public sealed class SpectreRaftLogTests
         var log = new SpectreRaftLog(console);
 
         // Act
-        log.WriteNodeStatus(new RaftStatus(2, 3, RaftRole.Leader, 2));
+        log.WriteNodeStatus(new RaftStatus(new NodeId(2), new Term(3), RaftRole.Leader, new LeaderId(2)));
 
         // Assert
         console.Output.Should().Contain("Election");
@@ -120,9 +120,9 @@ public sealed class SpectreRaftLogTests
         var log = new SpectreRaftLog(console);
 
         // Act
-        log.WriteNodeStatus(new RaftStatus(2, 3, RaftRole.Follower, null));
-        log.WriteNodeStatus(new RaftStatus(2, 3, RaftRole.Candidate, null));
-        log.WriteNodeStatus(new RaftStatus(2, 3, RaftRole.Leader, null));
+        log.WriteNodeStatus(new RaftStatus(new NodeId(2), new Term(3), RaftRole.Follower, null));
+        log.WriteNodeStatus(new RaftStatus(new NodeId(2), new Term(3), RaftRole.Candidate, null));
+        log.WriteNodeStatus(new RaftStatus(new NodeId(2), new Term(3), RaftRole.Leader, null));
 
         // Assert
         console.Output.Should().Contain("Follower");
@@ -140,7 +140,11 @@ public sealed class SpectreRaftLogTests
         var log = new SpectreRaftLog(console);
 
         // Act
-        var act = () => log.WriteNodeStatus(new RaftStatus(2, 3, (RaftRole)999, null));
+        var act = () => log.WriteNodeStatus(new RaftStatus(
+            new NodeId(2),
+            new Term(3),
+            (RaftRole)999,
+            null));
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>();

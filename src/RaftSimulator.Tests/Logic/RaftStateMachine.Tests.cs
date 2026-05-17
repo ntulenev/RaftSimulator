@@ -18,13 +18,13 @@ public sealed class RaftStateMachineTests
         var now = TestNow;
         machine.Initialize(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
         _ = machine.HandleRequestVote(
-            new RaftVoteRequest(2, 2),
+            new RaftVoteRequest(new Term(2), new CandidateId(2)),
             now,
             TimeSpan.FromSeconds(4));
 
         // Act
         var decision = machine.HandleRequestVote(
-            new RaftVoteRequest(1, 3),
+            new RaftVoteRequest(new Term(1), new CandidateId(3)),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -45,7 +45,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleAppendEntries(
-            new RaftAppendEntriesRequest(3, 5),
+            new RaftAppendEntriesRequest(new Term(3), new LeaderId(5)),
             now,
             TimeSpan.FromSeconds(4));
         var status = machine.GetStatus();
@@ -72,7 +72,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleVoteResponse(
-            new RaftVoteResponse(timeout.Term, 2, true),
+            new RaftVoteResponse(timeout.Term, new FromId(2), true),
             now,
             TimeSpan.FromSeconds(4));
         var status = machine.GetStatus();
@@ -96,7 +96,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleAppendEntries(
-            new RaftAppendEntriesRequest(1, 2),
+            new RaftAppendEntriesRequest(new Term(1), new LeaderId(2)),
             heartbeatAt,
             TimeSpan.FromSeconds(5));
         var delay = machine.GetNextDelay(heartbeatAt + TimeSpan.FromSeconds(4));
@@ -115,13 +115,13 @@ public sealed class RaftStateMachineTests
         var now = TestNow;
         machine.Initialize(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
         _ = machine.HandleRequestVote(
-            new RaftVoteRequest(3, 2),
+            new RaftVoteRequest(new Term(3), new CandidateId(2)),
             now,
             TimeSpan.FromSeconds(4));
 
         // Act
         var decision = machine.HandleAppendEntries(
-            new RaftAppendEntriesRequest(2, 3),
+            new RaftAppendEntriesRequest(new Term(2), new LeaderId(3)),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -141,11 +141,11 @@ public sealed class RaftStateMachineTests
 
         // Act
         var first = machine.HandleAppendEntries(
-            new RaftAppendEntriesRequest(2, 3),
+            new RaftAppendEntriesRequest(new Term(2), new LeaderId(3)),
             now,
             TimeSpan.FromSeconds(4));
         var second = machine.HandleAppendEntries(
-            new RaftAppendEntriesRequest(2, 3),
+            new RaftAppendEntriesRequest(new Term(2), new LeaderId(3)),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -169,7 +169,7 @@ public sealed class RaftStateMachineTests
             TimeSpan.FromSeconds(4),
             TimeSpan.FromSeconds(1));
         _ = machine.HandleVoteResponse(
-            new RaftVoteResponse(timeout.Term, 2, true),
+            new RaftVoteResponse(timeout.Term, new FromId(2), true),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -204,7 +204,7 @@ public sealed class RaftStateMachineTests
     {
         // Arrange
         var machine = CreateLeaderStateMachine();
-        machine.RegisterHeartbeatAck(2, TestNow + TimeSpan.FromSeconds(3));
+        machine.RegisterHeartbeatAck(new FromId(2), TestNow + TimeSpan.FromSeconds(3));
 
         // Act
         var quorumEvent = machine.BuildQuorumEvent(
@@ -242,13 +242,13 @@ public sealed class RaftStateMachineTests
             TimeSpan.FromSeconds(4),
             TimeSpan.FromSeconds(1));
         _ = machine.HandleVoteResponse(
-            new RaftVoteResponse(timeout.Term, 2, true),
+            new RaftVoteResponse(timeout.Term, new FromId(2), true),
             now,
             TimeSpan.FromSeconds(4));
 
         // Act
         var decision = machine.HandleAppendEntriesResponse(
-            new RaftAppendEntriesResponse(4, 2, true),
+            new RaftAppendEntriesResponse(new Term(4), new FromId(2), true),
             now,
             TimeSpan.FromSeconds(4));
         var status = machine.GetStatus();
@@ -271,7 +271,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleAppendEntriesResponse(
-            new RaftAppendEntriesResponse(0, 2, true),
+            new RaftAppendEntriesResponse(new Term(0), new FromId(2), true),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -291,7 +291,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleVoteResponse(
-            new RaftVoteResponse(3, 2, false),
+            new RaftVoteResponse(new Term(3), new FromId(2), false),
             now,
             TimeSpan.FromSeconds(4));
         var status = machine.GetStatus();
@@ -313,7 +313,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleVoteResponse(
-            new RaftVoteResponse(0, 2, true),
+            new RaftVoteResponse(new Term(0), new FromId(2), true),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -337,7 +337,7 @@ public sealed class RaftStateMachineTests
 
         // Act
         var decision = machine.HandleVoteResponse(
-            new RaftVoteResponse(timeout.Term, 2, false),
+            new RaftVoteResponse(timeout.Term, new FromId(2), false),
             now,
             TimeSpan.FromSeconds(4));
 
@@ -368,11 +368,11 @@ public sealed class RaftStateMachineTests
     public void AppendEntriesDecisionExposesEvents()
     {
         // Arrange
-        var raftEvent = new HeartbeatReceivedEvent(2, 1);
+        var raftEvent = new HeartbeatReceivedEvent(new LeaderId(2), new Term(1));
 
         // Act
         var decision = new AppendEntriesDecision(
-            new RaftAppendEntriesResponse(1, 1, true),
+            new RaftAppendEntriesResponse(new Term(1), new FromId(1), true),
             [raftEvent],
             null);
 
@@ -392,7 +392,7 @@ public sealed class RaftStateMachineTests
             TimeSpan.FromSeconds(4),
             TimeSpan.FromSeconds(1));
         _ = machine.HandleVoteResponse(
-            new RaftVoteResponse(timeout.Term, 2, true),
+            new RaftVoteResponse(timeout.Term, new FromId(2), true),
             TestNow,
             TimeSpan.FromSeconds(4));
         return machine;
