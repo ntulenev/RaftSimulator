@@ -43,6 +43,17 @@ All options live under the `Raft` section.
 }
 ```
 
+## Running a local 5-node simulation
+On Windows, run the helper script from the repository root:
+
+```bat
+run-5nodes.bat
+```
+
+The script builds the simulator and opens five command windows for nodes on ports
+`5001` through `5005`. Close the opened windows, or press `Ctrl+C` in each one,
+to stop the simulation.
+
 
 ## Screenshots
 Start screen before elections begin:
