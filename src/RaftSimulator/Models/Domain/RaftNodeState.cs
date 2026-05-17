@@ -5,6 +5,8 @@ namespace RaftSimulator.Models.Domain;
 /// </summary>
 internal sealed class RaftNodeState
 {
+    private readonly Dictionary<int, DateTimeOffset> _lastHeartbeatAckAt = [];
+
     /// <summary>
     /// Initializes a new instance of the <see cref="RaftNodeState"/> class.
     /// </summary>
@@ -24,11 +26,16 @@ internal sealed class RaftNodeState
         VotesReceived = 0;
         ResetLeaderTracking();
         ScheduleElection(now, electionTimeout);
-        ScheduleHeartbeat(now, heartbeatInterval);
+        NextHeartbeatAt = now + heartbeatInterval;
     }
 
     internal void StartElection(int nodeId, DateTimeOffset now, TimeSpan electionTimeout)
     {
+        if (Role == RaftRole.Leader)
+        {
+            throw new InvalidOperationException("Leader cannot start a new election.");
+        }
+
         Role = RaftRole.Candidate;
         CurrentTerm = CurrentTerm.Next();
         VotedFor = new CandidateId(nodeId);
@@ -37,14 +44,24 @@ internal sealed class RaftNodeState
         ScheduleElection(now, electionTimeout);
     }
 
-    internal void BecomeLeader(int nodeId, DateTimeOffset now)
+    internal void BecomeLeader(int nodeId, int majority, DateTimeOffset now)
     {
+        if (Role != RaftRole.Candidate)
+        {
+            throw new InvalidOperationException("Only candidate can become leader.");
+        }
+
+        if (VotesReceived < majority)
+        {
+            throw new InvalidOperationException("Candidate cannot become leader before receiving majority.");
+        }
+
         Role = RaftRole.Leader;
         LeaderId = new LeaderId(nodeId);
         VotesReceived = 0;
         NextHeartbeatAt = now;
         LeaderSince = now;
-        LastHeartbeatAckAt.Clear();
+        _lastHeartbeatAckAt.Clear();
     }
 
     internal void BecomeFollower(
@@ -53,6 +70,11 @@ internal sealed class RaftNodeState
         DateTimeOffset now,
         TimeSpan electionTimeout)
     {
+        if (term < CurrentTerm.Value)
+        {
+            throw new InvalidOperationException("Node cannot move to an older term.");
+        }
+
         Role = RaftRole.Follower;
         LeaderId = leaderId is null ? null : new LeaderId(leaderId.Value);
         VotesReceived = 0;
@@ -67,63 +89,133 @@ internal sealed class RaftNodeState
         ScheduleElection(now, electionTimeout);
     }
 
+    internal bool TryGrantVote(
+        RaftVoteRequest request,
+        DateTimeOffset now,
+        TimeSpan electionTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.IsStaleFor(CurrentTerm))
+        {
+            throw new InvalidOperationException("Cannot grant a stale vote request.");
+        }
+
+        if (!request.CanBeGrantedBy(Role, VotedFor))
+        {
+            return false;
+        }
+
+        VotedFor = request.CandidateId;
+        ScheduleElection(now, electionTimeout);
+        return true;
+    }
+
+    internal void AcceptHeartbeat(
+        RaftAppendEntriesRequest request,
+        DateTimeOffset now,
+        TimeSpan electionTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.IsStaleFor(CurrentTerm))
+        {
+            throw new InvalidOperationException("Cannot accept a stale heartbeat.");
+        }
+
+        if (Role != RaftRole.Follower)
+        {
+            throw new InvalidOperationException("Only follower can accept a leader heartbeat.");
+        }
+
+        LeaderId = request.LeaderId;
+        ScheduleElection(now, electionTimeout);
+    }
+
+    internal int RecordGrantedVote()
+    {
+        if (Role != RaftRole.Candidate)
+        {
+            throw new InvalidOperationException("Only candidate can record granted votes.");
+        }
+
+        VotesReceived++;
+        return VotesReceived;
+    }
+
+    internal bool HasMajority(int majority) => VotesReceived >= majority;
+
     internal void ScheduleElection(DateTimeOffset now, TimeSpan electionTimeout) =>
         NextElectionDeadline = now + electionTimeout;
 
-    internal void ScheduleHeartbeat(DateTimeOffset now, TimeSpan heartbeatInterval) =>
-        NextHeartbeatAt = now + heartbeatInterval;
+    internal void ScheduleHeartbeat(DateTimeOffset now, TimeSpan heartbeatInterval)
+    {
+        if (Role != RaftRole.Leader)
+        {
+            throw new InvalidOperationException("Only leader can schedule heartbeats.");
+        }
 
-    internal void RegisterHeartbeatAck(int peerId, DateTimeOffset now) =>
-        LastHeartbeatAckAt[peerId] = now;
+        NextHeartbeatAt = now + heartbeatInterval;
+    }
+
+    internal void RegisterHeartbeatAck(int peerId, DateTimeOffset now)
+    {
+        if (Role != RaftRole.Leader)
+        {
+            throw new InvalidOperationException("Only leader can register heartbeat acknowledgements.");
+        }
+
+        _lastHeartbeatAckAt[peerId] = now;
+    }
 
     private void ResetLeaderTracking()
     {
         LeaderSince = default;
-        LastHeartbeatAckAt.Clear();
+        _lastHeartbeatAckAt.Clear();
     }
 
     /// <summary>
-    /// Gets or sets current node role.
+    /// Gets current node role.
     /// </summary>
-    public RaftRole Role { get; set; }
+    public RaftRole Role { get; private set; }
 
     /// <summary>
-    /// Gets or sets current term.
+    /// Gets current term.
     /// </summary>
-    public Term CurrentTerm { get; set; } = Term.Initial;
+    public Term CurrentTerm { get; private set; } = Term.Initial;
 
     /// <summary>
-    /// Gets or sets node voted for in the current term.
+    /// Gets node voted for in the current term.
     /// </summary>
-    public CandidateId? VotedFor { get; set; }
+    public CandidateId? VotedFor { get; private set; }
 
     /// <summary>
-    /// Gets or sets known leader identifier.
+    /// Gets known leader identifier.
     /// </summary>
-    public LeaderId? LeaderId { get; set; }
+    public LeaderId? LeaderId { get; private set; }
 
     /// <summary>
-    /// Gets or sets votes received in the current election.
+    /// Gets votes received in the current election.
     /// </summary>
-    public int VotesReceived { get; set; }
+    public int VotesReceived { get; private set; }
 
     /// <summary>
-    /// Gets or sets time when this node became leader.
+    /// Gets time when this node became leader.
     /// </summary>
-    public DateTimeOffset LeaderSince { get; set; }
+    public DateTimeOffset LeaderSince { get; private set; }
 
     /// <summary>
-    /// Gets or sets next election deadline.
+    /// Gets next election deadline.
     /// </summary>
-    public DateTimeOffset NextElectionDeadline { get; set; }
+    public DateTimeOffset NextElectionDeadline { get; private set; }
 
     /// <summary>
-    /// Gets or sets next heartbeat deadline.
+    /// Gets next heartbeat deadline.
     /// </summary>
-    public DateTimeOffset NextHeartbeatAt { get; set; }
+    public DateTimeOffset NextHeartbeatAt { get; private set; }
 
     /// <summary>
     /// Gets last successful heartbeat acknowledgement time by peer identifier.
     /// </summary>
-    public Dictionary<int, DateTimeOffset> LastHeartbeatAckAt { get; } = [];
+    public IReadOnlyDictionary<int, DateTimeOffset> LastHeartbeatAckAt => _lastHeartbeatAckAt;
 }

@@ -69,12 +69,7 @@ internal sealed class RaftStateMachine
                 events.Add(BecomeFollower(request.Term.Value, null, now, electionTimeout));
             }
 
-            var canVote = request.CanBeGrantedBy(State.Role, State.VotedFor);
-            if (canVote)
-            {
-                State.VotedFor = request.CandidateId;
-                State.ScheduleElection(now, electionTimeout);
-            }
+            var canVote = State.TryGrantVote(request, now, electionTimeout);
 
             response = new RaftVoteResponse(State.CurrentTerm, Id, canVote);
             events.Add(canVote
@@ -119,8 +114,7 @@ internal sealed class RaftStateMachine
                     electionTimeout));
             }
 
-            State.LeaderId = request.LeaderId;
-            State.ScheduleElection(now, electionTimeout);
+            State.AcceptHeartbeat(request, now, electionTimeout);
 
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, true);
             events.Add(new HeartbeatReceivedEvent(request.LeaderId.Value, State.CurrentTerm.Value));
@@ -194,15 +188,15 @@ internal sealed class RaftStateMachine
         }
         else
         {
-            State.VotesReceived++;
+            var votesReceived = State.RecordGrantedVote();
             events.Add(new VoteResponseGrantedEvent(
                 response.FromId.Value,
-                State.VotesReceived,
+                votesReceived,
                 _settings.Majority));
 
-            if (State.VotesReceived >= _settings.Majority)
+            if (State.HasMajority(_settings.Majority))
             {
-                State.BecomeLeader(Id, now);
+                State.BecomeLeader(Id, _settings.Majority, now);
                 events.Add(new BecameLeaderEvent(State.CurrentTerm.Value));
                 becameLeader = true;
                 term = State.CurrentTerm.Value;

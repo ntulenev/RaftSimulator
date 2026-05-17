@@ -35,7 +35,8 @@ public sealed class RaftNodeStateTests
         var now = TestNow;
         state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
         state.StartElection(1, now, TimeSpan.FromSeconds(4));
-        state.BecomeLeader(1, now);
+        state.RecordGrantedVote();
+        state.BecomeLeader(1, 2, now);
         state.RegisterHeartbeatAck(2, now);
 
         // Act
@@ -58,9 +59,11 @@ public sealed class RaftNodeStateTests
         var state = new RaftNodeState();
         var now = TestNow;
         state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        state.StartElection(1, now, TimeSpan.FromSeconds(4));
+        state.RecordGrantedVote();
 
         // Act
-        state.BecomeLeader(1, now);
+        state.BecomeLeader(1, 2, now);
 
         // Assert
         state.Role.Should().Be(RaftRole.Leader);
@@ -68,6 +71,151 @@ public sealed class RaftNodeStateTests
         state.VotesReceived.Should().Be(0);
         state.NextHeartbeatAt.Should().Be(now);
         state.LeaderSince.Should().Be(now);
+    }
+
+    [Fact(DisplayName = "TryGrantVote records vote only when request is grantable")]
+    [Trait("Category", "Unit")]
+    public void TryGrantVoteRecordsVoteOnlyWhenRequestIsGrantable()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        var firstRequest = new RaftVoteRequest(new Term(0), new CandidateId(2));
+        var secondRequest = new RaftVoteRequest(new Term(0), new CandidateId(3));
+
+        // Act
+        var firstGranted = state.TryGrantVote(firstRequest, now, TimeSpan.FromSeconds(5));
+        var secondGranted = state.TryGrantVote(secondRequest, now, TimeSpan.FromSeconds(6));
+
+        // Assert
+        firstGranted.Should().BeTrue();
+        secondGranted.Should().BeFalse();
+        state.VotedFor.Should().Be(new CandidateId(2));
+        state.NextElectionDeadline.Should().Be(now + TimeSpan.FromSeconds(5));
+    }
+
+    [Fact(DisplayName = "AcceptHeartbeat records leader only for current follower term")]
+    [Trait("Category", "Unit")]
+    public void AcceptHeartbeatRecordsLeaderOnlyForCurrentFollowerTerm()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        var request = new RaftAppendEntriesRequest(new Term(0), new LeaderId(2));
+
+        // Act
+        state.AcceptHeartbeat(request, now, TimeSpan.FromSeconds(5));
+
+        // Assert
+        state.LeaderId.Should().Be(new LeaderId(2));
+        state.NextElectionDeadline.Should().Be(now + TimeSpan.FromSeconds(5));
+    }
+
+    [Fact(DisplayName = "StartElection rejects leader transition")]
+    [Trait("Category", "Unit")]
+    public void StartElectionRejectsLeaderTransition()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        state.StartElection(1, now, TimeSpan.FromSeconds(4));
+        state.RecordGrantedVote();
+        state.BecomeLeader(1, 2, now);
+
+        // Act
+        var act = () => state.StartElection(1, now, TimeSpan.FromSeconds(4));
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Leader cannot start a new election.");
+    }
+
+    [Fact(DisplayName = "BecomeLeader rejects non-candidate and candidate without majority")]
+    [Trait("Category", "Unit")]
+    public void BecomeLeaderRejectsInvalidTransitions()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+
+        // Act
+        var followerAct = () => state.BecomeLeader(1, 2, now);
+
+        // Assert
+        followerAct.Should().Throw<InvalidOperationException>()
+            .WithMessage("Only candidate can become leader.");
+
+        state.StartElection(1, now, TimeSpan.FromSeconds(4));
+        var candidateWithoutMajorityAct = () => state.BecomeLeader(1, 2, now);
+
+        candidateWithoutMajorityAct.Should().Throw<InvalidOperationException>()
+            .WithMessage("Candidate cannot become leader before receiving majority.");
+    }
+
+    [Fact(DisplayName = "BecomeFollower rejects older term")]
+    [Trait("Category", "Unit")]
+    public void BecomeFollowerRejectsOlderTerm()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        state.StartElection(1, now, TimeSpan.FromSeconds(4));
+
+        // Act
+        var act = () => state.BecomeFollower(0, null, now, TimeSpan.FromSeconds(5));
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Node cannot move to an older term.");
+    }
+
+    [Fact(DisplayName = "Heartbeat-only operations reject non-leader state")]
+    [Trait("Category", "Unit")]
+    public void HeartbeatOnlyOperationsRejectNonLeaderState()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+
+        // Act
+        var scheduleAct = () => state.ScheduleHeartbeat(now, TimeSpan.FromSeconds(1));
+        var ackAct = () => state.RegisterHeartbeatAck(2, now);
+
+        // Assert
+        scheduleAct.Should().Throw<InvalidOperationException>()
+            .WithMessage("Only leader can schedule heartbeats.");
+        ackAct.Should().Throw<InvalidOperationException>()
+            .WithMessage("Only leader can register heartbeat acknowledgements.");
+    }
+
+    [Fact(DisplayName = "Stale vote and heartbeat requests are rejected")]
+    [Trait("Category", "Unit")]
+    public void StaleVoteAndHeartbeatRequestsAreRejected()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        state.StartElection(1, now, TimeSpan.FromSeconds(4));
+        state.BecomeFollower(1, null, now, TimeSpan.FromSeconds(4));
+        var staleVote = new RaftVoteRequest(new Term(0), new CandidateId(2));
+        var staleHeartbeat = new RaftAppendEntriesRequest(new Term(0), new LeaderId(2));
+
+        // Act
+        var voteAct = () => state.TryGrantVote(staleVote, now, TimeSpan.FromSeconds(5));
+        var heartbeatAct = () => state.AcceptHeartbeat(staleHeartbeat, now, TimeSpan.FromSeconds(5));
+
+        // Assert
+        voteAct.Should().Throw<InvalidOperationException>()
+            .WithMessage("Cannot grant a stale vote request.");
+        heartbeatAct.Should().Throw<InvalidOperationException>()
+            .WithMessage("Cannot accept a stale heartbeat.");
     }
 
     private static readonly DateTimeOffset TestNow = new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
