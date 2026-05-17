@@ -3,7 +3,38 @@ namespace RaftSimulator.Models.Domain.Events;
 /// <summary>
 /// Event emitted when a peer grants a vote.
 /// </summary>
-/// <param name="FromId">Peer node identifier.</param>
-/// <param name="TotalVotes">Total votes received.</param>
-/// <param name="Majority">Majority threshold.</param>
-internal sealed record VoteResponseGrantedEvent(int FromId, int TotalVotes, int Majority) : RaftEvent;
+internal sealed record VoteResponseGrantedEvent : RaftEvent
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VoteResponseGrantedEvent"/> class.
+    /// </summary>
+    /// <param name="fromId">Peer node identifier.</param>
+    /// <param name="totalVotes">Total votes received.</param>
+    /// <param name="majority">Majority threshold.</param>
+    public VoteResponseGrantedEvent(int fromId, int totalVotes, int majority)
+    {
+        FromId = DomainEventGuard.RequireNodeId(fromId, nameof(fromId), "Peer id");
+        TotalVotes = DomainEventGuard.RequirePositiveCount(totalVotes, nameof(totalVotes), "Total votes");
+        Majority = DomainEventGuard.RequirePositiveCount(majority, nameof(majority), "Majority");
+
+        if (totalVotes > majority)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalVotes), totalVotes, "Total votes must be <= majority.");
+        }
+    }
+
+    /// <summary>
+    /// Gets peer node identifier.
+    /// </summary>
+    public int FromId { get; }
+
+    /// <summary>
+    /// Gets total votes received.
+    /// </summary>
+    public int TotalVotes { get; }
+
+    /// <summary>
+    /// Gets majority threshold.
+    /// </summary>
+    public int Majority { get; }
+}
