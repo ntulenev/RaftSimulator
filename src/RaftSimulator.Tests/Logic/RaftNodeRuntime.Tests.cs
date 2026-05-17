@@ -15,10 +15,10 @@ public sealed class RaftNodeRuntimeTests
     public void GetStatusReturnsInitializedFollowerStatus()
     {
         // Arrange
-        var node = CreateNode();
+        var scenario = new RuntimeScenario();
 
         // Act
-        var status = node.GetStatus();
+        var status = scenario.Node.GetStatus();
 
         // Assert
         status.NodeId.Should().Be(new NodeId(1));
@@ -32,18 +32,17 @@ public sealed class RaftNodeRuntimeTests
     public async Task OnRequestVoteReturnsStateMachineVoteResponse()
     {
         // Arrange
-        var eventLog = new TestRaftEventLog();
-        var node = CreateNode(eventLog: eventLog);
+        var scenario = new RuntimeScenario();
 
         // Act
-        var response = await node.OnRequestVoteAsync(
+        var response = await scenario.Node.OnRequestVoteAsync(
             new RaftVoteRequest(2, 2),
             CancellationToken.None);
 
         // Assert
         response.Should().Be(new RaftVoteResponse(2, 1, true));
-        eventLog.Events.Should().Contain(item => item.Event is RequestVoteGrantedEvent);
-        node.GetStatus().Term.Should().Be(new Term(2));
+        scenario.EventLog.Events.Should().Contain(item => item.Event is RequestVoteGrantedEvent);
+        scenario.Node.GetStatus().Term.Should().Be(new Term(2));
     }
 
     [Fact(DisplayName = "OnAppendEntries returns state machine append response and status snapshot")]
@@ -51,19 +50,17 @@ public sealed class RaftNodeRuntimeTests
     public async Task OnAppendEntriesReturnsStateMachineAppendResponseAndStatusSnapshot()
     {
         // Arrange
-        var log = new TestRaftLog();
-        var eventLog = new TestRaftEventLog();
-        var node = CreateNode(log, eventLog);
+        var scenario = new RuntimeScenario();
 
         // Act
-        var response = await node.OnAppendEntriesAsync(
+        var response = await scenario.Node.OnAppendEntriesAsync(
             new RaftAppendEntriesRequest(3, 2),
             CancellationToken.None);
 
         // Assert
         response.Should().Be(new RaftAppendEntriesResponse(3, 1, true));
-        eventLog.Events.Should().Contain(item => item.Event is HeartbeatReceivedEvent);
-        log.Statuses.Should().ContainSingle().Which.LeaderId.Should().Be(new LeaderId(2));
+        scenario.EventLog.Events.Should().Contain(item => item.Event is HeartbeatReceivedEvent);
+        scenario.Log.Statuses.Should().ContainSingle().Which.LeaderId.Should().Be(new LeaderId(2));
     }
 
     [Fact(DisplayName = "RunAsync starts election when scheduler timeout elapses")]
@@ -71,32 +68,19 @@ public sealed class RaftNodeRuntimeTests
     public async Task RunAsyncStartsElectionWhenSchedulerTimeoutElapses()
     {
         // Arrange
-        var settings = CreateSettings();
-        var clock = new TestClock();
-        var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
-        var electionRunner = new SpyElectionRunner();
-        var log = new TestRaftLog();
-        var eventLog = new TestRaftEventLog();
-        var node = new RaftNode(
-            settings,
-            log,
-            eventLog,
-            clock,
-            new FixedDelayProvider(),
-            scheduler,
-            electionRunner,
-            new SpyHeartbeatRunner());
+        var scenario = new RuntimeScenario()
+            .AdvanceBeforeTimeout(TimeSpan.FromSeconds(5));
 
         // Act
-        await node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(CancellationToken.None);
 
         // Assert
-        electionRunner.StartElectionCalls.Should().Be(1);
-        electionRunner.LastVoteTerm.Should().Be(1);
-        electionRunner.LastCandidateId.Should().Be(1);
-        eventLog.Events.Should().ContainSingle(item => item.Event is ElectionTimeoutEvent);
-        log.Messages.Should().Contain("Started as follower.");
-        log.Messages.Should().Contain("Stopped.");
+        scenario.ElectionRunner.StartElectionCalls.Should().Be(1);
+        scenario.ElectionRunner.LastVoteTerm.Should().Be(1);
+        scenario.ElectionRunner.LastCandidateId.Should().Be(1);
+        scenario.EventLog.Events.Should().ContainSingle(item => item.Event is ElectionTimeoutEvent);
+        scenario.Log.Messages.Should().Contain("Started as follower.");
+        scenario.Log.Messages.Should().Contain("Stopped.");
     }
 
     [Fact(DisplayName = "RunAsync sends heartbeats after winning an election")]
@@ -104,41 +88,18 @@ public sealed class RaftNodeRuntimeTests
     public async Task RunAsyncSendsHeartbeatsAfterWinningAnElection()
     {
         // Arrange
-        var settings = CreateSettings();
-        var clock = new TestClock();
-        var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
-        var electionRunner = new SpyElectionRunner
-        {
-            VoteResults =
-            [
-                new RaftVoteResponse(1, settings.Peers[0].Id, true)
-            ]
-        };
-        var heartbeatRunner = new SpyHeartbeatRunner
-        {
-            Responses =
-            [
-                new RaftAppendEntriesResponse(1, settings.Peers[0].Id, true)
-            ],
-            AckPeerIds = [settings.Peers[0].Id]
-        };
-        var node = new RaftNode(
-            settings,
-            new TestRaftLog(),
-            new TestRaftEventLog(),
-            clock,
-            new FixedDelayProvider(),
-            scheduler,
-            electionRunner,
-            heartbeatRunner);
+        var scenario = new RuntimeScenario()
+            .AdvanceBeforeTimeout(TimeSpan.FromSeconds(5))
+            .GrantVoteFromFirstPeer()
+            .AckHeartbeatFromFirstPeer();
 
         // Act
-        await node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(CancellationToken.None);
 
         // Assert
-        heartbeatRunner.SendHeartbeatCalls.Should().Be(1);
-        heartbeatRunner.LastHeartbeatTerm.Should().Be(1);
-        heartbeatRunner.LastLeaderId.Should().Be(1);
+        scenario.HeartbeatRunner.SendHeartbeatCalls.Should().Be(1);
+        scenario.HeartbeatRunner.LastHeartbeatTerm.Should().Be(1);
+        scenario.HeartbeatRunner.LastLeaderId.Should().Be(1);
     }
 
     [Fact(DisplayName = "RunAsync reports out of quorum from heartbeat runner callback")]
@@ -146,36 +107,16 @@ public sealed class RaftNodeRuntimeTests
     public async Task RunAsyncReportsOutOfQuorumFromHeartbeatRunnerCallback()
     {
         // Arrange
-        var settings = CreateSettings();
-        var clock = new TestClock();
-        var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
-        var eventLog = new TestRaftEventLog();
-        var electionRunner = new SpyElectionRunner
-        {
-            VoteResults =
-            [
-                new RaftVoteResponse(1, settings.Peers[0].Id, true)
-            ]
-        };
-        var heartbeatRunner = new SpyHeartbeatRunner
-        {
-            BeforeReportQuorum = () => clock.Advance(TimeSpan.FromSeconds(2))
-        };
-        var node = new RaftNode(
-            settings,
-            new TestRaftLog(),
-            eventLog,
-            clock,
-            new FixedDelayProvider(),
-            scheduler,
-            electionRunner,
-            heartbeatRunner);
+        var scenario = new RuntimeScenario()
+            .AdvanceBeforeTimeout(TimeSpan.FromSeconds(5))
+            .GrantVoteFromFirstPeer()
+            .AdvanceBeforeQuorumReport(TimeSpan.FromSeconds(2));
 
         // Act
-        await node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(CancellationToken.None);
 
         // Assert
-        eventLog.Events.Should().ContainSingle(item => item.Event is OutOfQuorumEvent);
+        scenario.EventLog.Events.Should().ContainSingle(item => item.Event is OutOfQuorumEvent);
     }
 
     [Fact(DisplayName = "RunAsync handles higher term heartbeat response callback")]
@@ -183,40 +124,17 @@ public sealed class RaftNodeRuntimeTests
     public async Task RunAsyncHandlesHigherTermHeartbeatResponseCallback()
     {
         // Arrange
-        var settings = CreateSettings();
-        var clock = new TestClock();
-        var scheduler = new TimeoutThenCancelScheduler(() => clock.Advance(TimeSpan.FromSeconds(5)));
-        var eventLog = new TestRaftEventLog();
-        var electionRunner = new SpyElectionRunner
-        {
-            VoteResults =
-            [
-                new RaftVoteResponse(1, settings.Peers[0].Id, true)
-            ]
-        };
-        var heartbeatRunner = new SpyHeartbeatRunner
-        {
-            Responses =
-            [
-                new RaftAppendEntriesResponse(2, settings.Peers[0].Id, true)
-            ]
-        };
-        var node = new RaftNode(
-            settings,
-            new TestRaftLog(),
-            eventLog,
-            clock,
-            new FixedDelayProvider(),
-            scheduler,
-            electionRunner,
-            heartbeatRunner);
+        var scenario = new RuntimeScenario()
+            .AdvanceBeforeTimeout(TimeSpan.FromSeconds(5))
+            .GrantVoteFromFirstPeer()
+            .ReceiveHigherTermHeartbeatResponse();
 
         // Act
-        await node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(CancellationToken.None);
 
         // Assert
-        eventLog.Events.Should().Contain(item => item.Event is HigherTermDiscoveredEvent);
-        node.GetStatus().Role.Should().Be(RaftRole.Follower);
+        scenario.EventLog.Events.Should().Contain(item => item.Event is HigherTermDiscoveredEvent);
+        scenario.Node.GetStatus().Role.Should().Be(RaftRole.Follower);
     }
 
     private static RaftSettings CreateSettings()
@@ -236,20 +154,75 @@ public sealed class RaftNodeRuntimeTests
         return RaftSettings.FromOptions(options);
     }
 
-    private static RaftNode CreateNode(
-        TestRaftLog? log = null,
-        TestRaftEventLog? eventLog = null)
+    private sealed class RuntimeScenario
     {
-        var settings = CreateSettings();
-        return new RaftNode(
-            settings,
-            log ?? new TestRaftLog(),
-            eventLog ?? new TestRaftEventLog(),
-            new TestClock(),
-            new FixedDelayProvider(),
-            new TimeoutThenCancelScheduler(() => { }),
-            new SpyElectionRunner(),
-            new SpyHeartbeatRunner());
+        public RuntimeScenario()
+        {
+            Scheduler = new TimeoutThenCancelScheduler(() => BeforeTimeout());
+            Node = new RaftNode(
+                Settings,
+                Log,
+                EventLog,
+                Clock,
+                new FixedDelayProvider(),
+                Scheduler,
+                ElectionRunner,
+                HeartbeatRunner);
+        }
+
+        public RaftSettings Settings { get; } = CreateSettings();
+
+        public TestClock Clock { get; } = new();
+
+        public TimeoutThenCancelScheduler Scheduler { get; }
+
+        public SpyElectionRunner ElectionRunner { get; } = new();
+
+        public SpyHeartbeatRunner HeartbeatRunner { get; } = new();
+
+        public TestRaftLog Log { get; } = new();
+
+        public TestRaftEventLog EventLog { get; } = new();
+
+        public RaftNode Node { get; }
+
+        private Action BeforeTimeout { get; set; } = () => { };
+
+        public RuntimeScenario AdvanceBeforeTimeout(TimeSpan value)
+        {
+            BeforeTimeout = () => Clock.Advance(value);
+            return this;
+        }
+
+        public RuntimeScenario GrantVoteFromFirstPeer()
+        {
+            var peerId = Settings.Peers[0].Id;
+            ElectionRunner.VoteResults = [new RaftVoteResponse(1, peerId, true)];
+            return this;
+        }
+
+        public RuntimeScenario AckHeartbeatFromFirstPeer()
+        {
+            var peerId = Settings.Peers[0].Id;
+            HeartbeatRunner.Responses = [new RaftAppendEntriesResponse(1, peerId, true)];
+            HeartbeatRunner.AckPeerIds = [peerId];
+            return this;
+        }
+
+        public RuntimeScenario AdvanceBeforeQuorumReport(TimeSpan value)
+        {
+            HeartbeatRunner.BeforeReportQuorum = () => Clock.Advance(value);
+            return this;
+        }
+
+        public RuntimeScenario ReceiveHigherTermHeartbeatResponse()
+        {
+            HeartbeatRunner.Responses =
+            [
+                new RaftAppendEntriesResponse(2, Settings.Peers[0].Id, true)
+            ];
+            return this;
+        }
     }
 
     private sealed class TimeoutThenCancelScheduler(Action beforeTimeout) : IRaftScheduler
@@ -295,7 +268,7 @@ public sealed class RaftNodeRuntimeTests
 
     private sealed class SpyElectionRunner : IRaftElectionRunner
     {
-        public IReadOnlyList<RaftVoteResponse> VoteResults { get; init; } = [];
+        public IReadOnlyList<RaftVoteResponse> VoteResults { get; set; } = [];
 
         public int StartElectionCalls { get; private set; }
 
@@ -325,11 +298,11 @@ public sealed class RaftNodeRuntimeTests
 
     private sealed class SpyHeartbeatRunner : IRaftHeartbeatRunner
     {
-        public IReadOnlyList<RaftAppendEntriesResponse> Responses { get; init; } = [];
+        public IReadOnlyList<RaftAppendEntriesResponse> Responses { get; set; } = [];
 
-        public IReadOnlyList<int> AckPeerIds { get; init; } = [];
+        public IReadOnlyList<int> AckPeerIds { get; set; } = [];
 
-        public Action? BeforeReportQuorum { get; init; }
+        public Action? BeforeReportQuorum { get; set; }
 
         public int SendHeartbeatCalls { get; private set; }
 
