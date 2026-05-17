@@ -18,23 +18,18 @@ public sealed class DomainValueGuardTests
         value.Should().Be(1);
     }
 
-    [Fact(DisplayName = "RequirePositiveId rejects non-positive id")]
+    [Theory(DisplayName = "RequirePositiveId rejects non-positive id")]
     [Trait("Category", "Unit")]
-    public void RequirePositiveIdRejectsNonPositiveId()
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void RequirePositiveIdRejectsNonPositiveId(int id)
     {
         // Act
-        Action[] acts =
-        [
-            () => _ = DomainValueGuard.RequirePositiveId(0, "id", "Node id"),
-            () => _ = DomainValueGuard.RequirePositiveId(-1, "id", "Node id")
-        ];
+        var act = () => DomainValueGuard.RequirePositiveId(id, "id", "Node id");
 
         // Assert
-        foreach (var act in acts)
-        {
-            act.Should().Throw<ArgumentOutOfRangeException>()
-                .WithParameterName("id");
-        }
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName(nameof(id));
     }
 
     [Fact(DisplayName = "RequireNonNegativeTerm returns valid term")]
@@ -60,39 +55,73 @@ public sealed class DomainValueGuardTests
             .WithParameterName("term");
     }
 
-    [Fact(DisplayName = "DomainEventGuard returns valid primitive values")]
+    [Fact(DisplayName = "RequireTerm returns valid term")]
     [Trait("Category", "Unit")]
-    public void DomainEventGuardReturnsValidPrimitiveValues()
+    public void RequireTermReturnsValidTerm()
     {
         // Act
         var term = DomainEventGuard.RequireTerm(0, "term");
-        var nodeId = DomainEventGuard.RequireNodeId(1, "nodeId", "Node id");
-        var count = DomainEventGuard.RequirePositiveCount(1, "count", "Count");
 
         // Assert
         term.Should().Be(0);
+    }
+
+    [Fact(DisplayName = "RequireNodeId returns valid node id")]
+    [Trait("Category", "Unit")]
+    public void RequireNodeIdReturnsValidNodeId()
+    {
+        // Act
+        var nodeId = DomainEventGuard.RequireNodeId(1, "nodeId", "Node id");
+
+        // Assert
         nodeId.Should().Be(1);
+    }
+
+    [Fact(DisplayName = "RequirePositiveCount returns valid count")]
+    [Trait("Category", "Unit")]
+    public void RequirePositiveCountReturnsValidCount()
+    {
+        // Act
+        var count = DomainEventGuard.RequirePositiveCount(1, "count", "Count");
+
+        // Assert
         count.Should().Be(1);
     }
 
-    [Fact(DisplayName = "DomainEventGuard rejects invalid primitive values")]
+    [Fact(DisplayName = "RequireTerm rejects negative term")]
     [Trait("Category", "Unit")]
-    public void DomainEventGuardRejectsInvalidPrimitiveValues()
+    public void RequireTermRejectsNegativeTerm()
     {
         // Act
-        Action[] acts =
-        [
-            () => _ = DomainEventGuard.RequireTerm(-1, "term"),
-            () => _ = DomainEventGuard.RequireNodeId(0, "nodeId", "Node id"),
-            () => _ = DomainEventGuard.RequireNodeId(-1, "nodeId", "Node id"),
-            () => _ = DomainEventGuard.RequirePositiveCount(0, "count", "Count"),
-            () => _ = DomainEventGuard.RequirePositiveCount(-1, "count", "Count")
-        ];
+        var act = () => DomainEventGuard.RequireTerm(-1, "term");
 
         // Assert
-        foreach (var act in acts)
-        {
-            act.Should().Throw<ArgumentOutOfRangeException>();
-        }
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory(DisplayName = "RequireNodeId rejects non-positive node id")]
+    [Trait("Category", "Unit")]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void RequireNodeIdRejectsNonPositiveNodeId(int nodeId)
+    {
+        // Act
+        var act = () => DomainEventGuard.RequireNodeId(nodeId, "nodeId", "Node id");
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Theory(DisplayName = "RequirePositiveCount rejects non-positive count")]
+    [Trait("Category", "Unit")]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void RequirePositiveCountRejectsNonPositiveCount(int count)
+    {
+        // Act
+        var act = () => DomainEventGuard.RequirePositiveCount(count, "count", "Count");
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
     }
 }
