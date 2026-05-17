@@ -1,5 +1,6 @@
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Transport;
 
 namespace RaftSimulator.Logic;
 
@@ -56,7 +57,13 @@ internal sealed class RaftHeartbeatRunner : IRaftHeartbeatRunner
 
             if (result.Error is not null)
             {
-                LogPeerFailure(nodeId, "AppendEntries", result.Peer.Id, term, result.Error);
+                _log.WriteNode(
+                    nodeId,
+                    PeerRpcLogFormatter.FormatFailure(
+                        "AppendEntries",
+                        result.Peer.Id,
+                        term,
+                        result.Error));
                 continue;
             }
 
@@ -69,20 +76,6 @@ internal sealed class RaftHeartbeatRunner : IRaftHeartbeatRunner
             handleAppendEntriesResponse(result.Response);
             registerHeartbeatAck(result.Peer.Id);
         }
-    }
-
-    private void LogPeerFailure(int nodeId, string rpcName, int peerId, int term, Exception exception)
-    {
-        if (exception is HttpRequestException or TaskCanceledException)
-        {
-            _log.WriteNode(nodeId, $"Unable to reach Node {peerId:00}.");
-            return;
-        }
-
-        _log.WriteNode(
-            nodeId,
-            $"{rpcName} (term {term}) -> Node {peerId:00} failed: " +
-            $"{exception.GetType().Name}: {exception.Message}");
     }
 
     private readonly IRaftPeerBroadcaster _peerBroadcaster;

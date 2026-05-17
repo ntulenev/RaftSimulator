@@ -1,5 +1,6 @@
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Transport;
 
 namespace RaftSimulator.Logic;
 
@@ -48,7 +49,13 @@ internal sealed class RaftElectionRunner : IRaftElectionRunner
 
             if (result.Error is not null)
             {
-                LogPeerFailure(nodeId, "RequestVote", result.Peer.Id, term, result.Error);
+                _log.WriteNode(
+                    nodeId,
+                    PeerRpcLogFormatter.FormatFailure(
+                        "RequestVote",
+                        result.Peer.Id,
+                        term,
+                        result.Error));
                 continue;
             }
 
@@ -60,20 +67,6 @@ internal sealed class RaftElectionRunner : IRaftElectionRunner
 
             await handleVoteResponseAsync(result.Response, cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    private void LogPeerFailure(int nodeId, string rpcName, int peerId, int term, Exception exception)
-    {
-        if (exception is HttpRequestException or TaskCanceledException)
-        {
-            _log.WriteNode(nodeId, $"Unable to reach Node {peerId:00}.");
-            return;
-        }
-
-        _log.WriteNode(
-            nodeId,
-            $"{rpcName} (term {term}) -> Node {peerId:00} failed: " +
-            $"{exception.GetType().Name}: {exception.Message}");
     }
 
     private readonly IRaftPeerBroadcaster _peerBroadcaster;
