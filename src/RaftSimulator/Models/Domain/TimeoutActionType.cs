@@ -1,4 +1,4 @@
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Models.Domain;
 
 /// <summary>
 /// Timeout action selected by the raft state machine.

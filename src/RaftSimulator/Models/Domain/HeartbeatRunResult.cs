@@ -1,6 +1,4 @@
-using RaftSimulator.Models.Domain;
-
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Models.Domain;
 
 /// <summary>
 /// Result of a heartbeat broadcast run.

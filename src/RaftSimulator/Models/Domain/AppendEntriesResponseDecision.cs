@@ -1,6 +1,6 @@
 using RaftSimulator.Logic.Events;
 
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Models.Domain;
 
 /// <summary>
 /// Result of handling an append entries response from a peer.

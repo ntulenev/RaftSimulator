@@ -1,6 +1,6 @@
 using RaftSimulator.Logic.Events;
 
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Models.Domain;
 
 /// <summary>
 /// Describes work to run after a raft timeout.

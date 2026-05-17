@@ -1,7 +1,6 @@
 using RaftSimulator.Logic.Events;
-using RaftSimulator.Models.Domain;
 
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Models.Domain;
 
 /// <summary>
 /// Result of handling an append entries request.

@@ -1,6 +1,4 @@
-using RaftSimulator.Models.Domain;
-
-namespace RaftSimulator.Logic;
+namespace RaftSimulator.Models.Domain;
 
 /// <summary>
 /// Mutable state owned by a raft node state machine.
