@@ -72,7 +72,7 @@ public sealed class RaftNodeRuntimeTests
             .AdvanceBeforeTimeout(TimeSpan.FromSeconds(5));
 
         // Act
-        await scenario.Node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(scenario.RunCancellation.Token);
 
         // Assert
         scenario.ElectionRunner.StartElectionCalls.Should().Be(1);
@@ -94,7 +94,7 @@ public sealed class RaftNodeRuntimeTests
             .AckHeartbeatFromFirstPeer();
 
         // Act
-        await scenario.Node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(scenario.RunCancellation.Token);
 
         // Assert
         scenario.HeartbeatRunner.SendHeartbeatCalls.Should().Be(1);
@@ -110,6 +110,7 @@ public sealed class RaftNodeRuntimeTests
         var settings = CreateSettings();
         var clock = new TestClock();
         var eventLog = new TestRaftEventLog();
+        using var cancellation = new CancellationTokenSource();
         var electionRunner = new SpyElectionRunner
         {
             VoteResults =
@@ -125,14 +126,15 @@ public sealed class RaftNodeRuntimeTests
             new FixedDelayProvider(),
             new RaftNodeRuntime(
                 new TimeoutSequenceScheduler(
-                () => clock.Advance(TimeSpan.FromSeconds(5)),
-                () => clock.Advance(TimeSpan.FromSeconds(2))),
+                    cancellation,
+                    () => clock.Advance(TimeSpan.FromSeconds(5)),
+                    () => clock.Advance(TimeSpan.FromSeconds(2))),
                 new TestRaftLog()),
             electionRunner,
             new SpyHeartbeatRunner());
 
         // Act
-        await node.RunAsync(CancellationToken.None);
+        await node.RunAsync(cancellation.Token);
 
         // Assert
         eventLog.Events.Should().ContainSingle(item => item.Event is OutOfQuorumEvent);
@@ -149,7 +151,7 @@ public sealed class RaftNodeRuntimeTests
             .ReceiveHigherTermHeartbeatResponse();
 
         // Act
-        await scenario.Node.RunAsync(CancellationToken.None);
+        await scenario.Node.RunAsync(scenario.RunCancellation.Token);
 
         // Assert
         scenario.EventLog.Events.Should().Contain(item => item.Event is HigherTermDiscoveredEvent);
@@ -177,7 +179,7 @@ public sealed class RaftNodeRuntimeTests
     {
         public RuntimeScenario()
         {
-            Scheduler = new TimeoutThenCancelScheduler(() => BeforeTimeout());
+            Scheduler = new TimeoutThenCancelScheduler(RunCancellation, () => BeforeTimeout());
             Node = new RaftNode(
                 Settings,
                 Log,
@@ -192,6 +194,8 @@ public sealed class RaftNodeRuntimeTests
         public RaftSettings Settings { get; } = CreateSettings();
 
         public TestClock Clock { get; } = new();
+
+        public CancellationTokenSource RunCancellation { get; } = new();
 
         public TimeoutThenCancelScheduler Scheduler { get; }
 
@@ -244,7 +248,9 @@ public sealed class RaftNodeRuntimeTests
         }
     }
 
-    private sealed class TimeoutThenCancelScheduler(Action beforeTimeout) : IRaftScheduler
+    private sealed class TimeoutThenCancelScheduler(
+        CancellationTokenSource cancellation,
+        Action beforeTimeout) : IRaftScheduler
     {
         private int _waitCalls;
 
@@ -252,7 +258,7 @@ public sealed class RaftNodeRuntimeTests
 
         public void Signal() => SignalCalls++;
 
-        public Task<RaftScheduleWaitResult> WaitAsync(
+        public async Task<RaftScheduleWaitResult> WaitAsync(
             Func<TimeSpan> getNextDelay,
             CancellationToken cancellationToken)
         {
@@ -264,14 +270,17 @@ public sealed class RaftNodeRuntimeTests
             {
                 _ = getNextDelay();
                 beforeTimeout();
-                return Task.FromResult(RaftScheduleWaitResult.Timeout);
+                return RaftScheduleWaitResult.Timeout;
             }
 
+            await cancellation.CancelAsync().ConfigureAwait(false);
             throw new OperationCanceledException(cancellationToken);
         }
     }
 
-    private sealed class TimeoutSequenceScheduler(params Action[] beforeTimeouts) : IRaftScheduler
+    private sealed class TimeoutSequenceScheduler(
+        CancellationTokenSource cancellation,
+        params Action[] beforeTimeouts) : IRaftScheduler
     {
         private int _waitCalls;
 
@@ -279,7 +288,7 @@ public sealed class RaftNodeRuntimeTests
         {
         }
 
-        public Task<RaftScheduleWaitResult> WaitAsync(
+        public async Task<RaftScheduleWaitResult> WaitAsync(
             Func<TimeSpan> getNextDelay,
             CancellationToken cancellationToken)
         {
@@ -288,13 +297,14 @@ public sealed class RaftNodeRuntimeTests
 
             if (_waitCalls >= beforeTimeouts.Length)
             {
+                await cancellation.CancelAsync().ConfigureAwait(false);
                 throw new OperationCanceledException(cancellationToken);
             }
 
             _ = getNextDelay();
             beforeTimeouts[_waitCalls]();
             _waitCalls++;
-            return Task.FromResult(RaftScheduleWaitResult.Timeout);
+            return RaftScheduleWaitResult.Timeout;
         }
     }
 

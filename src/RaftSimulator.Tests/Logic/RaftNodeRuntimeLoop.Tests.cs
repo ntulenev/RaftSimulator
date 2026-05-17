@@ -13,7 +13,8 @@ public sealed class RaftNodeRuntimeLoopTests
     public async Task RunAsyncInitializesAndHandlesTimeout()
     {
         // Arrange
-        var scheduler = new TimeoutThenCancelScheduler();
+        using var cancellation = new CancellationTokenSource();
+        var scheduler = new TimeoutThenCancelScheduler(cancellation);
         var log = new TestRaftLog();
         var runtime = new RaftNodeRuntime(scheduler, log);
         var initialized = false;
@@ -29,7 +30,7 @@ public sealed class RaftNodeRuntimeLoopTests
                 timeoutCalls++;
                 return Task.CompletedTask;
             },
-            CancellationToken.None);
+            cancellation.Token);
 
         // Assert
         initialized.Should().BeTrue();
@@ -43,7 +44,8 @@ public sealed class RaftNodeRuntimeLoopTests
     public void SignalForwardsScheduleSignal()
     {
         // Arrange
-        var scheduler = new TimeoutThenCancelScheduler();
+        using var cancellation = new CancellationTokenSource();
+        var scheduler = new TimeoutThenCancelScheduler(cancellation);
         var runtime = new RaftNodeRuntime(scheduler, new TestRaftLog());
 
         // Act
@@ -53,7 +55,26 @@ public sealed class RaftNodeRuntimeLoopTests
         scheduler.SignalCalls.Should().Be(1);
     }
 
-    private sealed class TimeoutThenCancelScheduler : IRaftScheduler
+    [Fact(DisplayName = "RunAsync propagates unexpected cancellation")]
+    [Trait("Category", "Unit")]
+    public async Task RunAsyncPropagatesUnexpectedCancellation()
+    {
+        // Arrange
+        var runtime = new RaftNodeRuntime(new UnexpectedCancelScheduler(), new TestRaftLog());
+
+        // Act
+        var act = () => runtime.RunAsync(
+            1,
+            () => { },
+            () => TimeSpan.Zero,
+            _ => Task.CompletedTask,
+            CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    private sealed class TimeoutThenCancelScheduler(CancellationTokenSource cancellation) : IRaftScheduler
     {
         private int _waitCalls;
 
@@ -62,7 +83,7 @@ public sealed class RaftNodeRuntimeLoopTests
         public void Signal() =>
             SignalCalls++;
 
-        public Task<RaftScheduleWaitResult> WaitAsync(
+        public async Task<RaftScheduleWaitResult> WaitAsync(
             Func<TimeSpan> getNextDelay,
             CancellationToken cancellationToken)
         {
@@ -73,10 +94,25 @@ public sealed class RaftNodeRuntimeLoopTests
             if (_waitCalls == 1)
             {
                 _ = getNextDelay();
-                return Task.FromResult(RaftScheduleWaitResult.Timeout);
+                return RaftScheduleWaitResult.Timeout;
             }
 
+            await cancellation.CancelAsync().ConfigureAwait(false);
             throw new OperationCanceledException(cancellationToken);
+        }
+    }
+
+    private sealed class UnexpectedCancelScheduler : IRaftScheduler
+    {
+        public void Signal()
+        {
+        }
+
+        public Task<RaftScheduleWaitResult> WaitAsync(
+            Func<TimeSpan> getNextDelay,
+            CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException();
         }
     }
 

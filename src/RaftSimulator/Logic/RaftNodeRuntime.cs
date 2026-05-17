@@ -56,7 +56,7 @@ internal sealed class RaftNodeRuntime : IRaftNodeRuntime
                 await handleTimeoutAsync(cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
         finally
