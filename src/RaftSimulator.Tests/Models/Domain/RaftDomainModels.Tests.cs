@@ -1,5 +1,6 @@
 using FluentAssertions;
 
+using RaftSimulator.Logic.Events;
 using RaftSimulator.Models.Domain;
 
 namespace RaftSimulator.Tests.Models.Domain;
@@ -203,6 +204,100 @@ public sealed class RaftDomainModelsTests
         {
             act.Should().Throw<ArgumentNullException>();
         }
+    }
+
+    [Fact(DisplayName = "Domain decisions reject invalid constructor arguments")]
+    [Trait("Category", "Unit")]
+    public void DomainDecisionsRejectInvalidConstructorArguments()
+    {
+        // Arrange
+        var response = new RaftVoteResponse(1, 2, true);
+        var appendResponse = new RaftAppendEntriesResponse(1, 2, true);
+        var raftEvent = new LeaderHeartbeatEvent();
+
+        // Act
+        Action[] nullActs =
+        [
+            () => _ = new VoteDecision(null!, []),
+            () => _ = new VoteDecision(response, null!),
+            () => _ = new AppendEntriesDecision(null!, [], null),
+            () => _ = new AppendEntriesDecision(appendResponse, null!, null),
+            () => _ = new AppendEntriesResponseDecision(null!),
+            () => _ = new HeartbeatRunResult(null!, []),
+            () => _ = new HeartbeatRunResult([], null!),
+            () => _ = new TimeoutAction(TimeoutActionType.Election, 1, null!),
+            () => _ = new VoteResponseDecision(null!, false, 1, null)
+        ];
+
+        Action[] invalidActs =
+        [
+            () => _ = new VoteDecision(response, [null!]),
+            () => _ = new AppendEntriesDecision(appendResponse, [null!], null),
+            () => _ = new AppendEntriesResponseDecision([null!]),
+            () => _ = new HeartbeatRunResult([null!], []),
+            () => _ = new HeartbeatRunResult([], [0]),
+            () => _ = new TimeoutAction((TimeoutActionType)99, 1, [raftEvent]),
+            () => _ = new TimeoutAction(TimeoutActionType.Election, -1, [raftEvent]),
+            () => _ = new TimeoutAction(TimeoutActionType.Election, 1, [null!]),
+            () => _ = new VoteResponseDecision([null!], false, 1, null),
+            () => _ = new VoteResponseDecision([], false, -1, null)
+        ];
+
+        // Assert
+        foreach (var act in nullActs)
+        {
+            act.Should().Throw<ArgumentNullException>();
+        }
+
+        foreach (var act in invalidActs)
+        {
+            act.Should().Throw<ArgumentException>();
+        }
+    }
+
+    [Fact(DisplayName = "Domain methods reject invalid arguments")]
+    [Trait("Category", "Unit")]
+    public void DomainMethodsRejectInvalidArguments()
+    {
+        // Arrange
+        var voteRequest = new RaftVoteRequest(1, 2);
+        var appendRequest = new RaftAppendEntriesRequest(1, 2);
+        var voteResponse = new RaftVoteResponse(1, 2, true);
+        var appendResponse = new RaftAppendEntriesResponse(1, 2, true);
+
+        // Act
+        Action[] nullActs =
+        [
+            () => _ = voteRequest.IsStaleFor(null!),
+            () => _ = voteRequest.AdvancesTerm(null!),
+            () => _ = appendRequest.IsStaleFor(null!),
+            () => _ = appendRequest.ShouldMakeFollower(null!, RaftRole.Follower),
+            () => _ = voteResponse.HasHigherTermThan(null!),
+            () => _ = voteResponse.IsForTerm(null!),
+            () => _ = appendResponse.HasHigherTermThan(null!)
+        ];
+
+        Action[] invalidArgumentActs =
+        [
+            () => _ = voteRequest.CanBeGrantedBy((RaftRole)99, null),
+            () => _ = appendRequest.ShouldMakeFollower(1, (RaftRole)99),
+            () => _ = new RaftStatus(1, 1, (RaftRole)99, null)
+        ];
+
+        var invalidOperationAct = () => new Term(int.MaxValue).Next();
+
+        // Assert
+        foreach (var act in nullActs)
+        {
+            act.Should().Throw<ArgumentNullException>();
+        }
+
+        foreach (var act in invalidArgumentActs)
+        {
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        invalidOperationAct.Should().Throw<InvalidOperationException>();
     }
 
     private static readonly string[] ExpectedRoles = ["Follower", "Candidate", "Leader"];

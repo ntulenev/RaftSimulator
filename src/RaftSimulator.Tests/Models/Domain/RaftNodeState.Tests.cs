@@ -218,5 +218,40 @@ public sealed class RaftNodeStateTests
             .WithMessage("Cannot accept a stale heartbeat.");
     }
 
+    [Fact(DisplayName = "State operations reject invalid arguments")]
+    [Trait("Category", "Unit")]
+    public void StateOperationsRejectInvalidArguments()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+
+        // Act
+        Action[] acts =
+        [
+            () => state.InitializeFollower(now, TimeSpan.Zero, TimeSpan.FromSeconds(1)),
+            () => state.InitializeFollower(now, TimeSpan.FromSeconds(1), TimeSpan.Zero),
+            () => state.StartElection(0, now, TimeSpan.FromSeconds(1)),
+            () => state.StartElection(1, now, TimeSpan.Zero),
+            () => state.BecomeLeader(0, 1, now),
+            () => state.BecomeLeader(1, 0, now),
+            () => state.BecomeFollower(-1, null, now, TimeSpan.FromSeconds(1)),
+            () => state.BecomeFollower(1, 0, now, TimeSpan.FromSeconds(1)),
+            () => state.BecomeFollower(1, null, now, TimeSpan.Zero),
+            () => state.TryGrantVote(new RaftVoteRequest(1, 1), now, TimeSpan.Zero),
+            () => state.AcceptHeartbeat(new RaftAppendEntriesRequest(1, 1), now, TimeSpan.Zero),
+            () => _ = state.HasMajority(0),
+            () => state.ScheduleElection(now, TimeSpan.Zero),
+            () => state.ScheduleHeartbeat(now, TimeSpan.Zero),
+            () => state.RegisterHeartbeatAck(0, now)
+        ];
+
+        // Assert
+        foreach (var act in acts)
+        {
+            act.Should().Throw<ArgumentException>();
+        }
+    }
+
     private static readonly DateTimeOffset TestNow = new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
 }
