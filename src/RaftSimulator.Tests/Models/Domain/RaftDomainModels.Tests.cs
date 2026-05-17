@@ -49,6 +49,7 @@ public sealed class RaftDomainModelsTests
         status.Term.Should().Be(new Term(5));
         status.Role.Should().Be(RaftRole.Leader);
         status.LeaderId.Should().Be(new LeaderId(1));
+        status.HasKnownLeader.Should().BeTrue();
     }
 
     [Fact(DisplayName = "RaftRole defines expected values")]
@@ -121,6 +122,87 @@ public sealed class RaftDomainModelsTests
         next.IsNewerThan(Term.Initial).Should().BeTrue();
         Term.Initial.IsOlderThan(next).Should().BeTrue();
         negative.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact(DisplayName = "Vote request evaluates grant rules")]
+    [Trait("Category", "Unit")]
+    public void VoteRequestEvaluatesGrantRules()
+    {
+        // Arrange
+        var request = new RaftVoteRequest(2, 3);
+
+        // Assert
+        request.IsStaleFor(new Term(3)).Should().BeTrue();
+        request.AdvancesTerm(new Term(1)).Should().BeTrue();
+        request.CanBeGrantedBy(RaftRole.Follower, null).Should().BeTrue();
+        request.CanBeGrantedBy(RaftRole.Follower, new CandidateId(3)).Should().BeTrue();
+        request.CanBeGrantedBy(RaftRole.Follower, new CandidateId(2)).Should().BeFalse();
+        request.CanBeGrantedBy(RaftRole.Leader, null).Should().BeFalse();
+    }
+
+    [Fact(DisplayName = "Vote response evaluates term relation")]
+    [Trait("Category", "Unit")]
+    public void VoteResponseEvaluatesTermRelation()
+    {
+        // Arrange
+        var response = new RaftVoteResponse(2, 3, true);
+
+        // Assert
+        response.HasHigherTermThan(new Term(1)).Should().BeTrue();
+        response.IsForTerm(new Term(2)).Should().BeTrue();
+        response.IsForTerm(new Term(3)).Should().BeFalse();
+    }
+
+    [Fact(DisplayName = "Append entries request evaluates follower transition rules")]
+    [Trait("Category", "Unit")]
+    public void AppendEntriesRequestEvaluatesFollowerTransitionRules()
+    {
+        // Arrange
+        var request = new RaftAppendEntriesRequest(2, 1);
+
+        // Assert
+        request.IsStaleFor(new Term(3)).Should().BeTrue();
+        request.ShouldMakeFollower(new Term(1), RaftRole.Follower).Should().BeTrue();
+        request.ShouldMakeFollower(new Term(2), RaftRole.Leader).Should().BeTrue();
+        request.ShouldMakeFollower(new Term(2), RaftRole.Follower).Should().BeFalse();
+    }
+
+    [Fact(DisplayName = "Append entries response evaluates term relation")]
+    [Trait("Category", "Unit")]
+    public void AppendEntriesResponseEvaluatesTermRelation()
+    {
+        // Arrange
+        var response = new RaftAppendEntriesResponse(2, 3, true);
+
+        // Assert
+        response.HasHigherTermThan(new Term(1)).Should().BeTrue();
+        response.HasHigherTermThan(new Term(2)).Should().BeFalse();
+    }
+
+    [Fact(DisplayName = "Raft RPC models reject null value objects")]
+    [Trait("Category", "Unit")]
+    public void RaftRpcModelsRejectNullValueObjects()
+    {
+        // Act
+        Action[] acts =
+        [
+            () => _ = new RaftVoteRequest(null!, 1),
+            () => _ = new RaftVoteRequest(1, null!),
+            () => _ = new RaftVoteResponse(null!, 1, true),
+            () => _ = new RaftVoteResponse(1, null!, true),
+            () => _ = new RaftAppendEntriesRequest(null!, 1),
+            () => _ = new RaftAppendEntriesRequest(1, null!),
+            () => _ = new RaftAppendEntriesResponse(null!, 1, true),
+            () => _ = new RaftAppendEntriesResponse(1, null!, true),
+            () => _ = new RaftStatus(null!, 1, RaftRole.Follower, null),
+            () => _ = new RaftStatus(1, null!, RaftRole.Follower, null)
+        ];
+
+        // Assert
+        foreach (var act in acts)
+        {
+            act.Should().Throw<ArgumentNullException>();
+        }
     }
 
     private static readonly string[] ExpectedRoles = ["Follower", "Candidate", "Leader"];
