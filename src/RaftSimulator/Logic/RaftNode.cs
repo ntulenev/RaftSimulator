@@ -1,7 +1,7 @@
 using RaftSimulator.Abstractions;
-using RaftSimulator.Models.Domain.Events;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Models.Domain.Events;
 
 namespace RaftSimulator.Logic;
 
@@ -43,12 +43,10 @@ internal sealed class RaftNode : IRaftNode
         _settings = settings;
         _log = log;
         _eventLog = eventLog;
-        _clock = clock;
-        _delayProvider = delayProvider;
+        _coordinator = new RaftNodeCoordinator(settings, clock, delayProvider, runtime);
         _runtime = runtime;
         _electionRunner = electionRunner;
         _heartbeatRunner = heartbeatRunner;
-        _stateMachine = new RaftStateMachine(settings);
     }
 
     /// <inheritdoc />
@@ -58,7 +56,7 @@ internal sealed class RaftNode : IRaftNode
     public Task RunAsync(CancellationToken cancellationToken) =>
         _runtime.RunAsync(
             Id,
-            InitializeState,
+            _coordinator.InitializeState,
             GetNextDelay,
             HandleTimeoutAsync,
             cancellationToken);
@@ -71,16 +69,7 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        VoteDecision decision;
-
-        lock (_gate)
-        {
-            decision = _stateMachine.HandleRequestVote(
-                request,
-                _clock.UtcNow,
-                GetRandomElectionTimeout());
-            SignalScheduleChangeUnsafe();
-        }
+        var decision = _coordinator.HandleRequestVote(request);
 
         LogEvents(decision.Events);
         return Task.FromResult(decision.Response);
@@ -94,16 +83,7 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        AppendEntriesDecision decision;
-
-        lock (_gate)
-        {
-            decision = _stateMachine.HandleAppendEntries(
-                request,
-                _clock.UtcNow,
-                GetRandomElectionTimeout());
-            SignalScheduleChangeUnsafe();
-        }
+        var decision = _coordinator.HandleAppendEntries(request);
 
         LogEvents(decision.Events);
         if (decision.StatusSnapshot is not null)
@@ -117,22 +97,7 @@ internal sealed class RaftNode : IRaftNode
     /// <inheritdoc />
     public RaftStatus GetStatus()
     {
-        lock (_gate)
-        {
-            return _stateMachine.GetStatus();
-        }
-    }
-
-    private void InitializeState()
-    {
-        lock (_gate)
-        {
-            _stateMachine.Initialize(
-                _clock.UtcNow,
-                GetRandomElectionTimeout(),
-                _settings.HeartbeatInterval);
-            SignalScheduleChangeUnsafe();
-        }
+        return _coordinator.GetStatus();
     }
 
     private async Task HandleTimeoutAsync(CancellationToken cancellationToken)
@@ -158,34 +123,14 @@ internal sealed class RaftNode : IRaftNode
 
     private TimeoutAction PrepareTimeoutAction()
     {
-        lock (_gate)
-        {
-            var action = _stateMachine.PrepareTimeoutAction(
-                _clock.UtcNow,
-                GetRandomElectionTimeout(),
-                _settings.HeartbeatInterval);
-            SignalScheduleChangeUnsafe();
-            return action;
-        }
+        return _coordinator.PrepareTimeoutAction();
     }
 
     private async Task HandleVoteResponseAsync(
         RaftVoteResponse response,
         CancellationToken cancellationToken)
     {
-        VoteResponseDecision decision;
-
-        lock (_gate)
-        {
-            decision = _stateMachine.HandleVoteResponse(
-                response,
-                _clock.UtcNow,
-                GetRandomElectionTimeout());
-            if (decision.Events.Count > 0 || decision.BecameLeader)
-            {
-                SignalScheduleChangeUnsafe();
-            }
-        }
+        var decision = _coordinator.HandleVoteResponse(response);
 
         LogEvents(decision.Events);
 
@@ -221,34 +166,19 @@ internal sealed class RaftNode : IRaftNode
 
     private TimeSpan GetNextDelay()
     {
-        lock (_gate)
-        {
-            return _stateMachine.GetNextDelay(_clock.UtcNow);
-        }
+        return _coordinator.GetNextDelay();
     }
-
-    private TimeSpan GetRandomElectionTimeout() =>
-        _delayProvider.GetDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
-
-    private void SignalScheduleChangeUnsafe() =>
-        _runtime.Signal();
 
     private void RegisterHeartbeatAck(int peerId)
     {
-        lock (_gate)
-        {
-            _stateMachine.RegisterHeartbeatAck(new FromId(peerId), _clock.UtcNow);
-        }
+        _coordinator.RegisterHeartbeatAck(new FromId(peerId));
     }
 
     private void ReportQuorum()
     {
         RaftEvent? quorumEvent;
 
-        lock (_gate)
-        {
-            quorumEvent = _stateMachine.BuildQuorumEvent(_clock.UtcNow, GetQuorumWindow());
-        }
+        quorumEvent = _coordinator.BuildQuorumEvent(GetQuorumWindow());
 
         if (quorumEvent is not null)
         {
@@ -261,19 +191,7 @@ internal sealed class RaftNode : IRaftNode
 
     private void HandleAppendEntriesResponse(RaftAppendEntriesResponse response)
     {
-        AppendEntriesResponseDecision decision;
-
-        lock (_gate)
-        {
-            decision = _stateMachine.HandleAppendEntriesResponse(
-                response,
-                _clock.UtcNow,
-                GetRandomElectionTimeout());
-            if (decision.Events.Count > 0)
-            {
-                SignalScheduleChangeUnsafe();
-            }
-        }
+        var decision = _coordinator.HandleAppendEntriesResponse(response);
 
         LogEvents(decision.Events);
     }
@@ -292,11 +210,8 @@ internal sealed class RaftNode : IRaftNode
     private readonly RaftSettings _settings;
     private readonly IRaftLog _log;
     private readonly IRaftEventLog _eventLog;
-    private readonly IRaftClock _clock;
-    private readonly IRaftDelayProvider _delayProvider;
     private readonly IRaftNodeRuntime _runtime;
-    private readonly RaftStateMachine _stateMachine;
+    private readonly RaftNodeCoordinator _coordinator;
     private readonly IRaftElectionRunner _electionRunner;
     private readonly IRaftHeartbeatRunner _heartbeatRunner;
-    private readonly Lock _gate = new();
 }
