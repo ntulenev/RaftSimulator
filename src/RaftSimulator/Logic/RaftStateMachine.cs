@@ -277,24 +277,13 @@ internal sealed class RaftStateMachine
             return null;
         }
 
-        var cutoff = now - window;
-        var reachablePeers = 0;
-
-        foreach (var peer in _settings.Peers)
-        {
-            if (State.LastHeartbeatAckAt.TryGetValue(peer.Id, out var ackAt) && ackAt >= cutoff)
-            {
-                reachablePeers++;
-            }
-        }
-
-        var reachable = reachablePeers + 1;
-        var needed = _settings.Majority;
-        var total = _settings.NodeCount;
-
-        return reachable >= needed
-            ? null
-            : new OutOfQuorumEvent(reachable, total, needed);
+        return RaftQuorumEvaluator.BuildOutOfQuorumEvent(
+            _settings.Peers,
+            State.LastHeartbeatAckAt,
+            _settings.Majority,
+            _settings.NodeCount,
+            now,
+            window);
     }
 
     /// <summary>
