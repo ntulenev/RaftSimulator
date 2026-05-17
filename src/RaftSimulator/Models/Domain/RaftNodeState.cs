@@ -5,8 +5,6 @@ namespace RaftSimulator.Models.Domain;
 /// </summary>
 internal sealed class RaftNodeState
 {
-    private readonly Dictionary<int, DateTimeOffset> _lastHeartbeatAckAt = [];
-
     /// <summary>
     /// Initializes a new instance of the <see cref="RaftNodeState"/> class.
     /// </summary>
@@ -218,4 +216,6 @@ internal sealed class RaftNodeState
     /// Gets last successful heartbeat acknowledgement time by peer identifier.
     /// </summary>
     public IReadOnlyDictionary<int, DateTimeOffset> LastHeartbeatAckAt => _lastHeartbeatAckAt;
+
+    private readonly Dictionary<int, DateTimeOffset> _lastHeartbeatAckAt = [];
 }
