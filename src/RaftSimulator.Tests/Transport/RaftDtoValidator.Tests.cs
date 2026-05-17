@@ -1,7 +1,7 @@
 using FluentAssertions;
 
 using RaftSimulator.Transport;
-using RaftSimulator.Transport.Models;
+using RaftSimulator.Contracts;
 
 namespace RaftSimulator.Tests.Transport;
 

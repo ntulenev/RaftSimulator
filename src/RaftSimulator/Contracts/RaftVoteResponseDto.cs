@@ -1,4 +1,4 @@
-namespace RaftSimulator.Transport.Models;
+namespace RaftSimulator.Contracts;
 
 /// <summary>
 /// Vote response DTO.

@@ -1,7 +1,7 @@
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
-using RaftSimulator.Transport.Models;
+using RaftSimulator.Contracts;
 
 namespace RaftSimulator.Transport;
 

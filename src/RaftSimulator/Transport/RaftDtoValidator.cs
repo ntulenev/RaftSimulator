@@ -1,4 +1,4 @@
-using RaftSimulator.Transport.Models;
+using RaftSimulator.Contracts;
 
 namespace RaftSimulator.Transport;
 

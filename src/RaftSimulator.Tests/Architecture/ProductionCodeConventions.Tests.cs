@@ -121,7 +121,7 @@ public sealed partial class ProductionCodeConventionsTests
         violations.Should().BeEmpty();
     }
 
-    [Fact(DisplayName = "Transport DTOs stay in API and transport layers")]
+    [Fact(DisplayName = "RPC contracts stay in API and transport layers")]
     [Trait("Category", "Architecture")]
     public void TransportDtosStayInApiAndTransportLayers()
     {
@@ -133,7 +133,7 @@ public sealed partial class ProductionCodeConventionsTests
 
         // Act
         var violations = files
-            .SelectMany(GetTransportDtoDependencyViolations)
+            .SelectMany(GetRpcContractDependencyViolations)
             .ToArray();
 
         // Assert
@@ -163,12 +163,12 @@ public sealed partial class ProductionCodeConventionsTests
             : $"{GetRelativePath(file)} declares {declaredNamespace}, expected {expectedNamespace}";
     }
 
-    private static IEnumerable<string> GetTransportDtoDependencyViolations(string file)
+    private static IEnumerable<string> GetRpcContractDependencyViolations(string file)
     {
         return GetUsingDependencyViolations(
             file,
-            TransportDtoUsingRegex(),
-            "depends on transport DTOs outside API or transport layer");
+            RpcContractUsingRegex(),
+            "depends on RPC contracts outside API or transport layer");
     }
 
     private static IEnumerable<string> GetTransportOrHostLayerDependencyViolations(string file)
@@ -300,8 +300,8 @@ public sealed partial class ProductionCodeConventionsTests
     [GeneratedRegex(@"^using\s+RaftSimulator\.(API|Hosting|Presentation|Transport)\b")]
     private static partial Regex TransportOrHostLayerUsingRegex();
 
-    [GeneratedRegex(@"^using\s+RaftSimulator\.Transport\.Models\b")]
-    private static partial Regex TransportDtoUsingRegex();
+    [GeneratedRegex(@"^using\s+RaftSimulator\.Contracts\b")]
+    private static partial Regex RpcContractUsingRegex();
 
     [GeneratedRegex(@"^namespace\s+(?<namespace>[A-Za-z0-9_.]+);$")]
     private static partial Regex NamespaceRegex();

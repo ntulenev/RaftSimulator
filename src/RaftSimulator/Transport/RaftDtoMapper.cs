@@ -1,5 +1,5 @@
 using RaftSimulator.Models.Domain;
-using RaftSimulator.Transport.Models;
+using RaftSimulator.Contracts;
 
 namespace RaftSimulator.Transport;
 

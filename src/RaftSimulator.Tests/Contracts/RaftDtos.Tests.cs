@@ -1,8 +1,8 @@
 using FluentAssertions;
 
-using RaftSimulator.Transport.Models;
+using RaftSimulator.Contracts;
 
-namespace RaftSimulator.Tests.Transport.Models;
+namespace RaftSimulator.Tests.Contracts;
 
 public sealed class RaftDtosTests
 {
