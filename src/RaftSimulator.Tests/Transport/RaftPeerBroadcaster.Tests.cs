@@ -151,9 +151,9 @@ public sealed class RaftPeerBroadcasterTests
             result.Response == null && result.Error!.GetType() == typeof(TaskCanceledException));
     }
 
-    [Fact(DisplayName = "RequestVotes maps requested cancellation to unavailable peers")]
+    [Fact(DisplayName = "RequestVotes propagates requested cancellation")]
     [Trait("Category", "Unit")]
-    public async Task RequestVotesMapsRequestedCancellationToUnavailablePeers()
+    public async Task RequestVotesPropagatesRequestedCancellation()
     {
         // Arrange
         var settings = CreateSettings();
@@ -173,11 +173,13 @@ public sealed class RaftPeerBroadcasterTests
             new FixedDelayProvider());
 
         // Act
-        var results = await broadcaster.RequestVotesAsync(new Term(2), new CandidateId(1), source.Token);
+        Func<Task> act = () => broadcaster.RequestVotesAsync(
+            new Term(2),
+            new CandidateId(1),
+            source.Token);
 
         // Assert
-        results.Should().HaveCount(2);
-        results.Should().OnlyContain(result => result.Response == null && result.Error == null);
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact(DisplayName = "RequestVotes rejects null domain arguments")]

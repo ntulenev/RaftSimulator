@@ -29,14 +29,10 @@ internal static class PeerRpcResultFactory
     /// <typeparam name="TResponse">Response type.</typeparam>
     /// <param name="peer">Peer information.</param>
     /// <param name="exception">Caught exception.</param>
-    /// <param name="cancellationToken">Call cancellation token.</param>
     /// <returns>Peer RPC result.</returns>
     public static PeerRpcResult<TResponse> FromException<TResponse>(
         PeerInfo peer,
-        Exception exception,
-        CancellationToken cancellationToken)
+        Exception exception)
         where TResponse : class =>
-        exception is OperationCanceledException && cancellationToken.IsCancellationRequested
-            ? PeerRpcResult<TResponse>.Unavailable(peer)
-            : PeerRpcResult<TResponse>.Failed(peer, exception);
+        PeerRpcResult<TResponse>.Failed(peer, exception);
 }

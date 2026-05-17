@@ -41,25 +41,23 @@ public sealed class PeerRpcResultFactoryTests
         result.Error.Should().BeNull();
     }
 
-    [Fact(DisplayName = "FromException maps requested cancellation to unavailable")]
+    [Fact(DisplayName = "FromException maps cancellation to failure")]
     [Trait("Category", "Unit")]
-    public void FromExceptionMapsRequestedCancellationToUnavailable()
+    public void FromExceptionMapsCancellationToFailure()
     {
         // Arrange
         var peer = new PeerInfo(2, new Uri("http://localhost:5002"));
-        using var source = new CancellationTokenSource();
-        source.Cancel();
+        var exception = new OperationCanceledException();
 
         // Act
         var result = PeerRpcResultFactory.FromException<RaftVoteResponse>(
             peer,
-            new OperationCanceledException(source.Token),
-            source.Token);
+            exception);
 
         // Assert
         result.Peer.Should().Be(peer);
         result.Response.Should().BeNull();
-        result.Error.Should().BeNull();
+        result.Error.Should().Be(exception);
     }
 
     [Fact(DisplayName = "FromException maps transport exception to failure")]
@@ -73,8 +71,7 @@ public sealed class PeerRpcResultFactoryTests
         // Act
         var result = PeerRpcResultFactory.FromException<RaftVoteResponse>(
             peer,
-            exception,
-            CancellationToken.None);
+            exception);
 
         // Assert
         result.Peer.Should().Be(peer);

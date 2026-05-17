@@ -80,33 +80,27 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
             await DelayNetworkAsync(cancellationToken).ConfigureAwait(false);
             return await sendAsync(peer).ConfigureAwait(false);
         }
-        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return PeerRpcResultFactory.FromException<TResponse>(
-                peer,
-                exception,
-                cancellationToken);
+            throw;
         }
         catch (HttpRequestException exception)
         {
             return PeerRpcResultFactory.FromException<TResponse>(
                 peer,
-                exception,
-                cancellationToken);
+                exception);
         }
         catch (TaskCanceledException exception)
         {
             return PeerRpcResultFactory.FromException<TResponse>(
                 peer,
-                exception,
-                cancellationToken);
+                exception);
         }
         catch (InvalidOperationException exception)
         {
             return PeerRpcResultFactory.FromException<TResponse>(
                 peer,
-                exception,
-                cancellationToken);
+                exception);
         }
     }
 
