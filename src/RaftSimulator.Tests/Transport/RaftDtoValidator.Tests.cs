@@ -22,7 +22,9 @@ public sealed class RaftDtoValidatorTests
     [Theory(DisplayName = "TryValidate rejects invalid vote request DTO")]
     [Trait("Category", "Unit")]
     [InlineData(0, 2, "Term must be positive.")]
+    [InlineData(-1, 2, "Term must be positive.")]
     [InlineData(1, 0, "CandidateId must be positive.")]
+    [InlineData(1, -1, "CandidateId must be positive.")]
     public void TryValidateRejectsInvalidVoteRequestDto(
         int term,
         int candidateId,
@@ -55,7 +57,9 @@ public sealed class RaftDtoValidatorTests
     [Theory(DisplayName = "TryValidate rejects invalid append entries request DTO")]
     [Trait("Category", "Unit")]
     [InlineData(0, 2, "Term must be positive.")]
+    [InlineData(-1, 2, "Term must be positive.")]
     [InlineData(1, 0, "LeaderId must be positive.")]
+    [InlineData(1, -1, "LeaderId must be positive.")]
     public void TryValidateRejectsInvalidAppendEntriesRequestDto(
         int term,
         int leaderId,

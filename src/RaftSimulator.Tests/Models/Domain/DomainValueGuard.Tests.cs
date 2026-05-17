@@ -23,11 +23,18 @@ public sealed class DomainValueGuardTests
     public void RequirePositiveIdRejectsNonPositiveId()
     {
         // Act
-        var act = () => DomainValueGuard.RequirePositiveId(0, "id", "Node id");
+        Action[] acts =
+        [
+            () => _ = DomainValueGuard.RequirePositiveId(0, "id", "Node id"),
+            () => _ = DomainValueGuard.RequirePositiveId(-1, "id", "Node id")
+        ];
 
         // Assert
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName("id");
+        foreach (var act in acts)
+        {
+            act.Should().Throw<ArgumentOutOfRangeException>()
+                .WithParameterName("id");
+        }
     }
 
     [Fact(DisplayName = "RequireNonNegativeTerm returns valid term")]
@@ -77,7 +84,9 @@ public sealed class DomainValueGuardTests
         [
             () => _ = DomainEventGuard.RequireTerm(-1, "term"),
             () => _ = DomainEventGuard.RequireNodeId(0, "nodeId", "Node id"),
-            () => _ = DomainEventGuard.RequirePositiveCount(0, "count", "Count")
+            () => _ = DomainEventGuard.RequireNodeId(-1, "nodeId", "Node id"),
+            () => _ = DomainEventGuard.RequirePositiveCount(0, "count", "Count"),
+            () => _ = DomainEventGuard.RequirePositiveCount(-1, "count", "Count")
         ];
 
         // Assert
