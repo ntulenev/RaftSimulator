@@ -102,21 +102,38 @@ public sealed class RaftNodeRuntimeTests
         scenario.HeartbeatRunner.LastLeaderId.Should().Be(1);
     }
 
-    [Fact(DisplayName = "RunAsync reports out of quorum from heartbeat runner callback")]
+    [Fact(DisplayName = "RunAsync reports out of quorum on leader heartbeat timeout")]
     [Trait("Category", "Unit")]
-    public async Task RunAsyncReportsOutOfQuorumFromHeartbeatRunnerCallback()
+    public async Task RunAsyncReportsOutOfQuorumOnLeaderHeartbeatTimeout()
     {
         // Arrange
-        var scenario = new RuntimeScenario()
-            .AdvanceBeforeTimeout(TimeSpan.FromSeconds(5))
-            .GrantVoteFromFirstPeer()
-            .AdvanceBeforeQuorumReport(TimeSpan.FromSeconds(2));
+        var settings = CreateSettings();
+        var clock = new TestClock();
+        var eventLog = new TestRaftEventLog();
+        var electionRunner = new SpyElectionRunner
+        {
+            VoteResults =
+            [
+                new RaftVoteResponse(1, settings.Peers[0].Id, true)
+            ]
+        };
+        var node = new RaftNode(
+            settings,
+            new TestRaftLog(),
+            eventLog,
+            clock,
+            new FixedDelayProvider(),
+            new TimeoutSequenceScheduler(
+                () => clock.Advance(TimeSpan.FromSeconds(5)),
+                () => clock.Advance(TimeSpan.FromSeconds(2))),
+            electionRunner,
+            new SpyHeartbeatRunner());
 
         // Act
-        await scenario.Node.RunAsync(CancellationToken.None);
+        await node.RunAsync(CancellationToken.None);
 
         // Assert
-        scenario.EventLog.Events.Should().ContainSingle(item => item.Event is OutOfQuorumEvent);
+        eventLog.Events.Should().ContainSingle(item => item.Event is OutOfQuorumEvent);
     }
 
     [Fact(DisplayName = "RunAsync handles higher term heartbeat response callback")]
@@ -252,6 +269,33 @@ public sealed class RaftNodeRuntimeTests
         }
     }
 
+    private sealed class TimeoutSequenceScheduler(params Action[] beforeTimeouts) : IRaftScheduler
+    {
+        private int _waitCalls;
+
+        public void Signal()
+        {
+        }
+
+        public Task<RaftScheduleWaitResult> WaitAsync(
+            Func<TimeSpan> getNextDelay,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(getNextDelay);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (_waitCalls >= beforeTimeouts.Length)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            _ = getNextDelay();
+            beforeTimeouts[_waitCalls]();
+            _waitCalls++;
+            return Task.FromResult(RaftScheduleWaitResult.Timeout);
+        }
+    }
+
     private sealed class TestClock : IRaftClock
     {
         public DateTimeOffset UtcNow { get; private set; } =
@@ -310,35 +354,18 @@ public sealed class RaftNodeRuntimeTests
 
         public int LastLeaderId { get; private set; }
 
-        public Task SendHeartbeatsAsync(
+        public Task<HeartbeatRunResult> SendHeartbeatsAsync(
             int term,
             int leaderId,
-            Action reportQuorum,
-            Action<RaftAppendEntriesResponse> handleAppendEntriesResponse,
-            Action<int> registerHeartbeatAck,
             CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(reportQuorum);
-            ArgumentNullException.ThrowIfNull(handleAppendEntriesResponse);
-            ArgumentNullException.ThrowIfNull(registerHeartbeatAck);
             cancellationToken.ThrowIfCancellationRequested();
 
             SendHeartbeatCalls++;
             LastHeartbeatTerm = term;
             LastLeaderId = leaderId;
             BeforeReportQuorum?.Invoke();
-            reportQuorum();
-            foreach (var response in Responses)
-            {
-                handleAppendEntriesResponse(response);
-            }
-
-            foreach (var peerId in AckPeerIds)
-            {
-                registerHeartbeatAck(peerId);
-            }
-
-            return Task.CompletedTask;
+            return Task.FromResult(new HeartbeatRunResult(Responses, AckPeerIds));
         }
     }
 

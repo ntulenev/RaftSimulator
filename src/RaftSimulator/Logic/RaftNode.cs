@@ -224,15 +224,21 @@ internal sealed class RaftNode : IRaftNode
 
     private async Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
     {
-        await _heartbeatRunner
-            .SendHeartbeatsAsync(
-                term,
-                Id,
-                ReportQuorum,
-                HandleAppendEntriesResponse,
-                RegisterHeartbeatAck,
-                cancellationToken)
+        ReportQuorum();
+
+        var result = await _heartbeatRunner
+            .SendHeartbeatsAsync(term, Id, cancellationToken)
             .ConfigureAwait(false);
+
+        foreach (var response in result.Responses)
+        {
+            HandleAppendEntriesResponse(response);
+        }
+
+        foreach (var peerId in result.AcknowledgedPeerIds)
+        {
+            RegisterHeartbeatAck(peerId);
+        }
     }
 
     private TimeSpan GetNextDelay()

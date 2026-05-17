@@ -10,26 +10,24 @@ namespace RaftSimulator.Tests.Logic;
 
 public sealed class RaftHeartbeatRunnerTests
 {
-    [Fact(DisplayName = "SendHeartbeats reports quorum before broadcasting")]
+    [Fact(DisplayName = "SendHeartbeats broadcasts to peers")]
     [Trait("Category", "Unit")]
-    public async Task SendHeartbeatsReportsQuorumBeforeBroadcasting()
+    public async Task SendHeartbeatsBroadcastsToPeers()
     {
         // Arrange
-        var order = new List<string>();
-        var broadcaster = new TestBroadcaster { BeforeSend = () => order.Add("broadcast") };
+        var broadcaster = new TestBroadcaster();
         var runner = new RaftHeartbeatRunner(broadcaster, new TestRaftLog());
 
         // Act
-        await runner.SendHeartbeatsAsync(
+        _ = await runner.SendHeartbeatsAsync(
             4,
             1,
-            () => order.Add("quorum"),
-            _ => order.Add("response"),
-            _ => order.Add("ack"),
             CancellationToken.None);
 
         // Assert
-        order.Should().Equal("quorum", "broadcast");
+        broadcaster.SendHeartbeatCalls.Should().Be(1);
+        broadcaster.LastHeartbeatTerm.Should().Be(4);
+        broadcaster.LastLeaderId.Should().Be(1);
     }
 
     [Fact(DisplayName = "SendHeartbeats handles successful append entries responses")]
@@ -48,24 +46,19 @@ public sealed class RaftHeartbeatRunnerTests
         };
         var log = new TestRaftLog();
         var runner = new RaftHeartbeatRunner(broadcaster, log);
-        var handled = new List<RaftAppendEntriesResponse>();
-        var acknowledgements = new List<int>();
 
         // Act
-        await runner.SendHeartbeatsAsync(
+        var result = await runner.SendHeartbeatsAsync(
             4,
             1,
-            () => { },
-            handled.Add,
-            acknowledgements.Add,
             CancellationToken.None);
 
         // Assert
         broadcaster.SendHeartbeatCalls.Should().Be(1);
         broadcaster.LastHeartbeatTerm.Should().Be(4);
         broadcaster.LastLeaderId.Should().Be(1);
-        handled.Should().ContainSingle().Which.Should().Be(response);
-        acknowledgements.Should().ContainSingle().Which.Should().Be(2);
+        result.Responses.Should().ContainSingle().Which.Should().Be(response);
+        result.AcknowledgedPeerIds.Should().ContainSingle().Which.Should().Be(2);
         log.Messages.Should().Contain("AppendEntries -> Node 02 (term 4).");
     }
 
@@ -81,19 +74,16 @@ public sealed class RaftHeartbeatRunnerTests
         };
         var log = new TestRaftLog();
         var runner = new RaftHeartbeatRunner(broadcaster, log);
-        var acknowledgements = new List<int>();
 
         // Act
-        await runner.SendHeartbeatsAsync(
+        var result = await runner.SendHeartbeatsAsync(
             4,
             1,
-            () => { },
-            _ => { },
-            acknowledgements.Add,
             CancellationToken.None);
 
         // Assert
-        acknowledgements.Should().BeEmpty();
+        result.AcknowledgedPeerIds.Should().BeEmpty();
+        result.Responses.Should().BeEmpty();
         log.Messages.Should().Contain("AppendEntries unavailable from Node 02.");
     }
 
@@ -116,12 +106,9 @@ public sealed class RaftHeartbeatRunnerTests
         var runner = new RaftHeartbeatRunner(broadcaster, log);
 
         // Act
-        await runner.SendHeartbeatsAsync(
+        _ = await runner.SendHeartbeatsAsync(
             4,
             1,
-            () => { },
-            _ => { },
-            _ => { },
             CancellationToken.None);
 
         // Assert
@@ -148,12 +135,9 @@ public sealed class RaftHeartbeatRunnerTests
         var runner = new RaftHeartbeatRunner(broadcaster, log);
 
         // Act
-        await runner.SendHeartbeatsAsync(
+        _ = await runner.SendHeartbeatsAsync(
             4,
             1,
-            () => { },
-            _ => { },
-            _ => { },
             CancellationToken.None);
 
         // Assert
@@ -167,8 +151,6 @@ public sealed class RaftHeartbeatRunnerTests
     {
         public IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>> HeartbeatResults { get; init; } =
             [];
-
-        public Action? BeforeSend { get; init; }
 
         public int SendHeartbeatCalls { get; private set; }
 
@@ -191,7 +173,6 @@ public sealed class RaftHeartbeatRunnerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            BeforeSend?.Invoke();
             SendHeartbeatCalls++;
             LastHeartbeatTerm = term;
             LastLeaderId = leaderId;

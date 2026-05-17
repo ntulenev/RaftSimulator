@@ -28,28 +28,18 @@ internal sealed class RaftHeartbeatRunner : IRaftHeartbeatRunner
     /// </summary>
     /// <param name="term">Leader term.</param>
     /// <param name="nodeId">Local node identifier.</param>
-    /// <param name="reportQuorum">Quorum reporting callback.</param>
-    /// <param name="handleAppendEntriesResponse">Append-entries response handler.</param>
-    /// <param name="registerHeartbeatAck">Heartbeat acknowledgement callback.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task SendHeartbeatsAsync(
+    /// <returns>Heartbeat run result.</returns>
+    public async Task<HeartbeatRunResult> SendHeartbeatsAsync(
         int term,
         int nodeId,
-        Action reportQuorum,
-        Action<RaftAppendEntriesResponse> handleAppendEntriesResponse,
-        Action<int> registerHeartbeatAck,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(reportQuorum);
-        ArgumentNullException.ThrowIfNull(handleAppendEntriesResponse);
-        ArgumentNullException.ThrowIfNull(registerHeartbeatAck);
-
-        reportQuorum();
-
         var results = await _peerBroadcaster
             .SendHeartbeatsAsync(term, nodeId, cancellationToken)
             .ConfigureAwait(false);
+        var responses = new List<RaftAppendEntriesResponse>(results.Count);
+        var acknowledgedPeerIds = new List<int>(results.Count);
 
         foreach (var result in results)
         {
@@ -73,9 +63,11 @@ internal sealed class RaftHeartbeatRunner : IRaftHeartbeatRunner
                 continue;
             }
 
-            handleAppendEntriesResponse(result.Response);
-            registerHeartbeatAck(result.Peer.Id);
+            responses.Add(result.Response);
+            acknowledgedPeerIds.Add(result.Peer.Id);
         }
+
+        return new HeartbeatRunResult(responses, acknowledgedPeerIds);
     }
 
     private readonly IRaftPeerBroadcaster _peerBroadcaster;

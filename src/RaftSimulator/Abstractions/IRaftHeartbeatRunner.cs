@@ -1,4 +1,4 @@
-using RaftSimulator.Models.Domain;
+using RaftSimulator.Logic;
 
 namespace RaftSimulator.Abstractions;
 
@@ -12,16 +12,10 @@ internal interface IRaftHeartbeatRunner
     /// </summary>
     /// <param name="term">Leader term.</param>
     /// <param name="nodeId">Local node identifier.</param>
-    /// <param name="reportQuorum">Quorum reporting callback.</param>
-    /// <param name="handleAppendEntriesResponse">Append-entries response handler.</param>
-    /// <param name="registerHeartbeatAck">Heartbeat acknowledgement callback.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    Task SendHeartbeatsAsync(
+    /// <returns>Heartbeat run result.</returns>
+    Task<HeartbeatRunResult> SendHeartbeatsAsync(
         int term,
         int nodeId,
-        Action reportQuorum,
-        Action<RaftAppendEntriesResponse> handleAppendEntriesResponse,
-        Action<int> registerHeartbeatAck,
         CancellationToken cancellationToken);
 }
