@@ -26,39 +26,42 @@ internal sealed class RaftHeartbeatRunner : IRaftHeartbeatRunner
     /// Sends heartbeat RPC calls and handles received append-entries responses.
     /// </summary>
     /// <param name="term">Leader term.</param>
-    /// <param name="nodeId">Local node identifier.</param>
+    /// <param name="leaderId">Local leader node identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Heartbeat run result.</returns>
     public async Task<HeartbeatRunResult> SendHeartbeatsAsync(
-        int term,
-        int nodeId,
+        Term term,
+        LeaderId leaderId,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(leaderId);
+
         var results = await _peerBroadcaster
-            .SendHeartbeatsAsync(term, nodeId, cancellationToken)
+            .SendHeartbeatsAsync(term, leaderId, cancellationToken)
             .ConfigureAwait(false);
         var responses = new List<RaftAppendEntriesResponse>(results.Count);
         var acknowledgedPeerIds = new List<int>(results.Count);
 
         foreach (var result in results)
         {
-            _log.WriteNode(nodeId, $"AppendEntries -> Node {result.Peer.Id:00} (term {term}).");
+            _log.WriteNode(leaderId.Value, $"AppendEntries -> Node {result.Peer.Id:00} (term {term}).");
 
             if (result.Error is not null)
             {
                 _log.WriteNode(
-                    nodeId,
+                    leaderId.Value,
                     PeerRpcLogFormatter.FormatFailure(
                         "AppendEntries",
                         result.Peer.Id,
-                        term,
+                        term.Value,
                         result.Error));
                 continue;
             }
 
             if (result.Response is null)
             {
-                _log.WriteNode(nodeId, $"AppendEntries unavailable from Node {result.Peer.Id:00}.");
+                _log.WriteNode(leaderId.Value, $"AppendEntries unavailable from Node {result.Peer.Id:00}.");
                 continue;
             }
 

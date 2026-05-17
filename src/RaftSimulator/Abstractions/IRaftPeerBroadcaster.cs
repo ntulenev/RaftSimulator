@@ -15,8 +15,8 @@ internal interface IRaftPeerBroadcaster
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Peer RPC results.</returns>
     Task<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>> RequestVotesAsync(
-        int term,
-        int candidateId,
+        Term term,
+        CandidateId candidateId,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -27,7 +27,7 @@ internal interface IRaftPeerBroadcaster
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Peer RPC results.</returns>
     Task<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>> SendHeartbeatsAsync(
-        int term,
-        int leaderId,
+        Term term,
+        LeaderId leaderId,
         CancellationToken cancellationToken);
 }

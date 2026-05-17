@@ -26,41 +26,43 @@ internal sealed class RaftElectionRunner : IRaftElectionRunner
     /// Starts an election and handles received vote responses.
     /// </summary>
     /// <param name="term">Election term.</param>
-    /// <param name="nodeId">Local node identifier.</param>
+    /// <param name="candidateId">Local candidate node identifier.</param>
     /// <param name="handleVoteResponseAsync">Vote response handler.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task StartElectionAsync(
-        int term,
-        int nodeId,
+        Term term,
+        CandidateId candidateId,
         Func<RaftVoteResponse, CancellationToken, Task> handleVoteResponseAsync,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(candidateId);
         ArgumentNullException.ThrowIfNull(handleVoteResponseAsync);
 
         var results = await _peerBroadcaster
-            .RequestVotesAsync(term, nodeId, cancellationToken)
+            .RequestVotesAsync(term, candidateId, cancellationToken)
             .ConfigureAwait(false);
 
         foreach (var result in results)
         {
-            _log.WriteNode(nodeId, $"RequestVote -> Node {result.Peer.Id:00} (term {term}).");
+            _log.WriteNode(candidateId.Value, $"RequestVote -> Node {result.Peer.Id:00} (term {term}).");
 
             if (result.Error is not null)
             {
                 _log.WriteNode(
-                    nodeId,
+                    candidateId.Value,
                     PeerRpcLogFormatter.FormatFailure(
                         "RequestVote",
                         result.Peer.Id,
-                        term,
+                        term.Value,
                         result.Error));
                 continue;
             }
 
             if (result.Response is null)
             {
-                _log.WriteNode(nodeId, $"VoteResponse unavailable from Node {result.Peer.Id:00}.");
+                _log.WriteNode(candidateId.Value, $"VoteResponse unavailable from Node {result.Peer.Id:00}.");
                 continue;
             }
 

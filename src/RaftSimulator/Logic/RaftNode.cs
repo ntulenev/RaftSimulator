@@ -147,12 +147,12 @@ internal sealed class RaftNode : IRaftNode
 
         if (action.Type == TimeoutActionType.Heartbeats)
         {
-            await SendHeartbeatsAsync(action.Term, cancellationToken).ConfigureAwait(false);
+            await SendHeartbeatsAsync(new Term(action.Term), cancellationToken).ConfigureAwait(false);
             return;
         }
 
         await _electionRunner
-            .StartElectionAsync(action.Term, Id, HandleVoteResponseAsync, cancellationToken)
+            .StartElectionAsync(new Term(action.Term), new CandidateId(Id), HandleVoteResponseAsync, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -196,16 +196,16 @@ internal sealed class RaftNode : IRaftNode
 
         if (decision.BecameLeader)
         {
-            await SendHeartbeatsAsync(decision.Term, cancellationToken).ConfigureAwait(false);
+            await SendHeartbeatsAsync(new Term(decision.Term), cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task SendHeartbeatsAsync(int term, CancellationToken cancellationToken)
+    private async Task SendHeartbeatsAsync(Term term, CancellationToken cancellationToken)
     {
         ReportQuorum();
 
         var result = await _heartbeatRunner
-            .SendHeartbeatsAsync(term, Id, cancellationToken)
+            .SendHeartbeatsAsync(term, new LeaderId(Id), cancellationToken)
             .ConfigureAwait(false);
 
         foreach (var response in result.Responses)

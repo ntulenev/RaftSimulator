@@ -143,6 +143,22 @@ public sealed class RaftHeartbeatRunnerTests
         log.Messages.Should().Contain("Unable to reach Node 02.");
     }
 
+    [Fact(DisplayName = "SendHeartbeats rejects null domain arguments")]
+    [Trait("Category", "Unit")]
+    public async Task SendHeartbeatsRejectsNullDomainArguments()
+    {
+        // Arrange
+        var runner = new RaftHeartbeatRunner(new TestBroadcaster(), new TestRaftLog());
+
+        // Act
+        Func<Task> nullTermAct = () => runner.SendHeartbeatsAsync(null!, 1, CancellationToken.None);
+        Func<Task> nullLeaderAct = () => runner.SendHeartbeatsAsync(1, null!, CancellationToken.None);
+
+        // Assert
+        await nullTermAct.Should().ThrowAsync<ArgumentNullException>();
+        await nullLeaderAct.Should().ThrowAsync<ArgumentNullException>();
+    }
+
     private static PeerInfo CreatePeer(int id) =>
         new(id, new Uri($"http://localhost:500{id}"));
 
@@ -158,23 +174,23 @@ public sealed class RaftHeartbeatRunnerTests
         public int LastLeaderId { get; private set; }
 
         public Task<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>> RequestVotesAsync(
-            int term,
-            int candidateId,
+            Term term,
+            CandidateId candidateId,
             CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
         }
 
         public Task<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>> SendHeartbeatsAsync(
-            int term,
-            int leaderId,
+            Term term,
+            LeaderId leaderId,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             SendHeartbeatCalls++;
-            LastHeartbeatTerm = term;
-            LastLeaderId = leaderId;
+            LastHeartbeatTerm = term.Value;
+            LastLeaderId = leaderId.Value;
             return Task.FromResult(HeartbeatResults);
         }
     }

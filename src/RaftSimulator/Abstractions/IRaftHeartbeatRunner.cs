@@ -11,11 +11,11 @@ internal interface IRaftHeartbeatRunner
     /// Sends heartbeat RPC calls and handles received append-entries responses.
     /// </summary>
     /// <param name="term">Leader term.</param>
-    /// <param name="nodeId">Local node identifier.</param>
+    /// <param name="leaderId">Local leader node identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Heartbeat run result.</returns>
     Task<HeartbeatRunResult> SendHeartbeatsAsync(
-        int term,
-        int nodeId,
+        Term term,
+        LeaderId leaderId,
         CancellationToken cancellationToken);
 }

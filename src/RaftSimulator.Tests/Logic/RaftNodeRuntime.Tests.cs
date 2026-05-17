@@ -323,8 +323,8 @@ public sealed class RaftNodeRuntimeTests
         public int LastCandidateId { get; private set; }
 
         public async Task StartElectionAsync(
-            int term,
-            int candidateId,
+            Term term,
+            CandidateId candidateId,
             Func<RaftVoteResponse, CancellationToken, Task> handleVoteResponseAsync,
             CancellationToken cancellationToken)
         {
@@ -332,8 +332,8 @@ public sealed class RaftNodeRuntimeTests
             cancellationToken.ThrowIfCancellationRequested();
 
             StartElectionCalls++;
-            LastVoteTerm = term;
-            LastCandidateId = candidateId;
+            LastVoteTerm = term.Value;
+            LastCandidateId = candidateId.Value;
 
             foreach (var response in VoteResults)
             {
@@ -357,15 +357,15 @@ public sealed class RaftNodeRuntimeTests
         public int LastLeaderId { get; private set; }
 
         public Task<HeartbeatRunResult> SendHeartbeatsAsync(
-            int term,
-            int leaderId,
+            Term term,
+            LeaderId leaderId,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             SendHeartbeatCalls++;
-            LastHeartbeatTerm = term;
-            LastLeaderId = leaderId;
+            LastHeartbeatTerm = term.Value;
+            LastLeaderId = leaderId.Value;
             BeforeReportQuorum?.Invoke();
             return Task.FromResult(new HeartbeatRunResult(Responses, AckPeerIds));
         }

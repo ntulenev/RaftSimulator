@@ -180,6 +180,44 @@ public sealed class RaftPeerBroadcasterTests
         results.Should().OnlyContain(result => result.Response == null && result.Error == null);
     }
 
+    [Fact(DisplayName = "RequestVotes rejects null domain arguments")]
+    [Trait("Category", "Unit")]
+    public async Task RequestVotesRejectsNullDomainArguments()
+    {
+        // Arrange
+        var broadcaster = new RaftPeerBroadcaster(
+            CreateSettings(),
+            Mock.Of<IRaftPeerClient>(),
+            new FixedDelayProvider());
+
+        // Act
+        Func<Task> nullTermAct = () => broadcaster.RequestVotesAsync(null!, 1, CancellationToken.None);
+        Func<Task> nullCandidateAct = () => broadcaster.RequestVotesAsync(1, null!, CancellationToken.None);
+
+        // Assert
+        await nullTermAct.Should().ThrowAsync<ArgumentNullException>();
+        await nullCandidateAct.Should().ThrowAsync<ArgumentNullException>();
+    }
+
+    [Fact(DisplayName = "SendHeartbeats rejects null domain arguments")]
+    [Trait("Category", "Unit")]
+    public async Task SendHeartbeatsRejectsNullDomainArguments()
+    {
+        // Arrange
+        var broadcaster = new RaftPeerBroadcaster(
+            CreateSettings(),
+            Mock.Of<IRaftPeerClient>(),
+            new FixedDelayProvider());
+
+        // Act
+        Func<Task> nullTermAct = () => broadcaster.SendHeartbeatsAsync(null!, 1, CancellationToken.None);
+        Func<Task> nullLeaderAct = () => broadcaster.SendHeartbeatsAsync(1, null!, CancellationToken.None);
+
+        // Assert
+        await nullTermAct.Should().ThrowAsync<ArgumentNullException>();
+        await nullLeaderAct.Should().ThrowAsync<ArgumentNullException>();
+    }
+
     private static RaftSettings CreateSettings()
     {
         var options = new RaftOptions

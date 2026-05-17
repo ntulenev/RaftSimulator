@@ -31,21 +31,31 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
 
     /// <inheritdoc />
     public Task<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>> RequestVotesAsync(
-        int term,
-        int candidateId,
-        CancellationToken cancellationToken) =>
-        BroadcastAsync(
+        Term term,
+        CandidateId candidateId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(candidateId);
+
+        return BroadcastAsync(
             peer => RequestVoteAsync(peer, term, candidateId, cancellationToken),
             cancellationToken);
+    }
 
     /// <inheritdoc />
     public Task<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>> SendHeartbeatsAsync(
-        int term,
-        int leaderId,
-        CancellationToken cancellationToken) =>
-        BroadcastAsync(
+        Term term,
+        LeaderId leaderId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(leaderId);
+
+        return BroadcastAsync(
             peer => AppendEntriesAsync(peer, term, leaderId, cancellationToken),
             cancellationToken);
+    }
 
     private async Task<IReadOnlyList<PeerRpcResult<TResponse>>> BroadcastAsync<TResponse>(
         Func<PeerInfo, Task<PeerRpcResult<TResponse>>> sendAsync,
@@ -102,8 +112,8 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
 
     private async Task<PeerRpcResult<RaftVoteResponse>> RequestVoteAsync(
         PeerInfo peer,
-        int term,
-        int candidateId,
+        Term term,
+        CandidateId candidateId,
         CancellationToken cancellationToken)
     {
         var response = await _peerClient
@@ -115,8 +125,8 @@ internal sealed class RaftPeerBroadcaster : IRaftPeerBroadcaster
 
     private async Task<PeerRpcResult<RaftAppendEntriesResponse>> AppendEntriesAsync(
         PeerInfo peer,
-        int term,
-        int leaderId,
+        Term term,
+        LeaderId leaderId,
         CancellationToken cancellationToken)
     {
         var response = await _peerClient

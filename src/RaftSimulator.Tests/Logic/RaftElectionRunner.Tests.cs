@@ -128,6 +128,30 @@ public sealed class RaftElectionRunnerTests
         log.Messages.Should().Contain("Unable to reach Node 02.");
     }
 
+    [Fact(DisplayName = "StartElection rejects null domain arguments")]
+    [Trait("Category", "Unit")]
+    public async Task StartElectionRejectsNullDomainArguments()
+    {
+        // Arrange
+        var runner = new RaftElectionRunner(new TestBroadcaster(), new TestRaftLog());
+
+        // Act
+        Func<Task> nullTermAct = () => runner.StartElectionAsync(
+            null!,
+            1,
+            (_, _) => Task.CompletedTask,
+            CancellationToken.None);
+        Func<Task> nullCandidateAct = () => runner.StartElectionAsync(
+            1,
+            null!,
+            (_, _) => Task.CompletedTask,
+            CancellationToken.None);
+
+        // Assert
+        await nullTermAct.Should().ThrowAsync<ArgumentNullException>();
+        await nullCandidateAct.Should().ThrowAsync<ArgumentNullException>();
+    }
+
     private static PeerInfo CreatePeer(int id) =>
         new(id, new Uri($"http://localhost:500{id}"));
 
@@ -142,21 +166,21 @@ public sealed class RaftElectionRunnerTests
         public int LastCandidateId { get; private set; }
 
         public Task<IReadOnlyList<PeerRpcResult<RaftVoteResponse>>> RequestVotesAsync(
-            int term,
-            int candidateId,
+            Term term,
+            CandidateId candidateId,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             RequestVoteCalls++;
-            LastVoteTerm = term;
-            LastCandidateId = candidateId;
+            LastVoteTerm = term.Value;
+            LastCandidateId = candidateId.Value;
             return Task.FromResult(VoteResults);
         }
 
         public Task<IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>>> SendHeartbeatsAsync(
-            int term,
-            int leaderId,
+            Term term,
+            LeaderId leaderId,
             CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
