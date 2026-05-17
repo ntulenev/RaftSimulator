@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace RaftSimulator.Models.Configuration;
 
 /// <summary>
@@ -39,30 +37,10 @@ internal static class RaftSettingsFactory
 
     private static void ValidateOptions(RaftOptions options)
     {
-        var validationResults = new List<ValidationResult>();
-        var validationContext = new ValidationContext(options);
-        if (!Validator.TryValidateObject(
-            options,
-            validationContext,
-            validationResults,
-            validateAllProperties: true))
+        var failures = RaftOptionsValidator.GetFailures(options);
+        if (failures.Count > 0)
         {
-            var message = string.Join(
-                " ",
-                validationResults.Select(static result => result.ErrorMessage));
-            throw new InvalidOperationException(message);
-        }
-
-        if (options.MaxElectionSeconds < options.MinElectionSeconds)
-        {
-            throw new InvalidOperationException(
-                "Raft:MaxElectionSeconds must be >= Raft:MinElectionSeconds.");
-        }
-
-        if (options.MaxNetworkDelaySeconds < options.MinNetworkDelaySeconds)
-        {
-            throw new InvalidOperationException(
-                "Raft:MaxNetworkDelaySeconds must be >= Raft:MinNetworkDelaySeconds.");
+            throw new InvalidOperationException(string.Join(" ", failures));
         }
     }
 

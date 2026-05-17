@@ -4,6 +4,8 @@ using RaftSimulator.Models.Configuration;
 using RaftSimulator.Presentation;
 using RaftSimulator.Transport;
 
+using Microsoft.Extensions.Options;
+
 namespace RaftSimulator.Hosting;
 
 /// <summary>
@@ -20,11 +22,14 @@ internal static class RaftApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var settings = RaftSettings.FromOptions(
-            builder.Configuration.GetSection("Raft").Get<RaftOptions>() ?? new RaftOptions());
+        var raftSection = builder.Configuration.GetSection("Raft");
+        var settings = RaftSettingsFactory.FromOptions(raftSection.Get<RaftOptions>() ?? new RaftOptions());
         _ = builder.WebHost.UseUrls($"http://localhost:{settings.Port}");
 
-        _ = builder.Services.AddSingleton(settings);
+        _ = builder.Services.Configure<RaftOptions>(raftSection);
+        _ = builder.Services.AddSingleton<IValidateOptions<RaftOptions>, RaftOptionsValidator>();
+        _ = builder.Services.AddSingleton(sp =>
+            RaftSettingsFactory.FromOptions(sp.GetRequiredService<IOptions<RaftOptions>>().Value));
         _ = builder.Services.AddSingleton<IRaftClock, SystemRaftClock>();
         _ = builder.Services.AddSingleton<IRaftRandom, CryptoRaftRandom>();
         _ = builder.Services.AddSingleton<IRaftDelayProvider, RaftDelayProvider>();

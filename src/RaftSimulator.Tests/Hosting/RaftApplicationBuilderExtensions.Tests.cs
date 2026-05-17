@@ -3,10 +3,12 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using RaftSimulator.Abstractions;
 using RaftSimulator.Hosting;
 using RaftSimulator.Logic;
+using RaftSimulator.Models.Configuration;
 
 namespace RaftSimulator.Tests.Hosting;
 
@@ -41,6 +43,8 @@ public sealed class RaftApplicationBuilderExtensionsTests
 
         // Assert
         settings.NodeId.Should().Be(1);
+        provider.GetRequiredService<IOptions<RaftOptions>>().Value.NodeId.Should().Be(1);
+        provider.GetRequiredService<RaftSettings>().NodeId.Should().Be(1);
         provider.GetRequiredService<IRaftElectionRunner>().Should().BeOfType<RaftElectionRunner>();
         provider.GetRequiredService<IRaftHeartbeatRunner>().Should().BeOfType<RaftHeartbeatRunner>();
         provider.GetRequiredService<IRaftNode>().Should().BeOfType<RaftNode>();
