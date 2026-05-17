@@ -208,11 +208,11 @@ public sealed class RaftDomainModelsTests
         heartbeatResult.Responses.Should().ContainSingle().Which.Should().Be(appendResponse);
         heartbeatResult.AcknowledgedPeerIds.Should().ContainSingle().Which.Should().Be(2);
         timeoutAction.Type.Should().Be(TimeoutActionType.Heartbeats);
-        timeoutAction.Term.Should().Be(1);
+        timeoutAction.Term.Should().Be(new Term(1));
         timeoutAction.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
         voteResponseDecision.Events.Should().ContainSingle().Which.Should().Be(raftEvent);
         voteResponseDecision.BecameLeader.Should().BeTrue();
-        voteResponseDecision.Term.Should().Be(1);
+        voteResponseDecision.Term.Should().Be(new Term(1));
         voteResponseDecision.StatusSnapshot.Should().Be(status);
     }
 
@@ -261,8 +261,10 @@ public sealed class RaftDomainModelsTests
             () => _ = new AppendEntriesResponseDecision(null!),
             () => _ = new HeartbeatRunResult(null!, []),
             () => _ = new HeartbeatRunResult([], null!),
+            () => _ = new TimeoutAction(TimeoutActionType.Election, null!, []),
             () => _ = new TimeoutAction(TimeoutActionType.Election, 1, null!),
-            () => _ = new VoteResponseDecision(null!, false, 1, null)
+            () => _ = new VoteResponseDecision(null!, false, 1, null),
+            () => _ = new VoteResponseDecision([], false, null!, null)
         ];
 
         Action[] invalidActs =
@@ -273,7 +275,6 @@ public sealed class RaftDomainModelsTests
             () => _ = new HeartbeatRunResult([null!], []),
             () => _ = new HeartbeatRunResult([], [0]),
             () => _ = new TimeoutAction((TimeoutActionType)99, 1, [raftEvent]),
-            () => _ = new TimeoutAction(TimeoutActionType.Election, -1, [raftEvent]),
             () => _ = new TimeoutAction(TimeoutActionType.Election, 1, [null!]),
             () => _ = new VoteResponseDecision([null!], false, 1, null),
             () => _ = new VoteResponseDecision([], false, -1, null)

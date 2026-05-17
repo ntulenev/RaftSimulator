@@ -142,7 +142,7 @@ internal sealed class RaftStateMachine
             State.ScheduleHeartbeat(now, heartbeatInterval);
             return new TimeoutAction(
                 TimeoutActionType.Heartbeats,
-                State.CurrentTerm.Value,
+                State.CurrentTerm,
                 [new LeaderHeartbeatEvent()]);
         }
 
@@ -150,7 +150,7 @@ internal sealed class RaftStateMachine
 
         return new TimeoutAction(
             TimeoutActionType.Election,
-            State.CurrentTerm.Value,
+            State.CurrentTerm,
             [new ElectionTimeoutEvent(State.CurrentTerm.Value)]);
     }
 
@@ -170,7 +170,7 @@ internal sealed class RaftStateMachine
 
         var events = new List<RaftEvent>(2);
         var becameLeader = false;
-        var term = response.Term.Value;
+        var term = response.Term;
         RaftStatus? statusSnapshot = null;
 
         if (response.HasHigherTermThan(State.CurrentTerm))
@@ -199,7 +199,7 @@ internal sealed class RaftStateMachine
                 State.BecomeLeader(Id, _settings.Majority, now);
                 events.Add(new BecameLeaderEvent(State.CurrentTerm.Value));
                 becameLeader = true;
-                term = State.CurrentTerm.Value;
+                term = State.CurrentTerm;
 
                 statusSnapshot = _statusReporter.GetSnapshotToPublish(GetStatus());
             }
@@ -241,8 +241,12 @@ internal sealed class RaftStateMachine
     /// </summary>
     /// <param name="peerId">Peer node identifier.</param>
     /// <param name="now">Current time.</param>
-    public void RegisterHeartbeatAck(int peerId, DateTimeOffset now) =>
-        State.RegisterHeartbeatAck(peerId, now);
+    public void RegisterHeartbeatAck(FromId peerId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(peerId);
+
+        State.RegisterHeartbeatAck(peerId.Value, now);
+    }
 
     /// <summary>
     /// Builds an out-of-quorum event when the current leader cannot reach majority.

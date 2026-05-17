@@ -17,19 +17,15 @@ internal sealed record VoteResponseDecision
     public VoteResponseDecision(
         IReadOnlyList<RaftEvent> events,
         bool becameLeader,
-        int term,
+        Term term,
         RaftStatus? statusSnapshot)
     {
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(term);
 
         if (events.Any(static @event => @event is null))
         {
             throw new ArgumentException("Events must not contain null items.", nameof(events));
-        }
-
-        if (term < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(term), term, "Term must be >= 0.");
         }
 
         Events = events;
@@ -51,7 +47,7 @@ internal sealed record VoteResponseDecision
     /// <summary>
     /// Gets term associated with follow-up work.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 
     /// <summary>
     /// Gets optional status snapshot to publish.

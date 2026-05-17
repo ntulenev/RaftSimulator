@@ -15,7 +15,7 @@ internal sealed record TimeoutAction
     /// <param name="events">Events emitted by the action.</param>
     public TimeoutAction(
         TimeoutActionType type,
-        int term,
+        Term term,
         IReadOnlyList<RaftEvent> events)
     {
         if (!Enum.IsDefined(type))
@@ -23,11 +23,7 @@ internal sealed record TimeoutAction
             throw new ArgumentOutOfRangeException(nameof(type), type, "Timeout action type is not supported.");
         }
 
-        if (term < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(term), term, "Term must be >= 0.");
-        }
-
+        ArgumentNullException.ThrowIfNull(term);
         ArgumentNullException.ThrowIfNull(events);
 
         if (events.Any(static @event => @event is null))
@@ -48,7 +44,7 @@ internal sealed record TimeoutAction
     /// <summary>
     /// Gets term associated with the action.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 
     /// <summary>
     /// Gets events emitted by the action.

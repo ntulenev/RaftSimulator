@@ -215,6 +215,20 @@ public sealed class RaftStateMachineTests
         quorumEvent.Should().BeNull();
     }
 
+    [Fact(DisplayName = "RegisterHeartbeatAck rejects null peer id")]
+    [Trait("Category", "Unit")]
+    public void RegisterHeartbeatAckRejectsNullPeerId()
+    {
+        // Arrange
+        var machine = CreateLeaderStateMachine();
+
+        // Act
+        var act = () => machine.RegisterHeartbeatAck(null!, TestNow);
+
+        // Assert
+        act.Should().Throw<ArgumentNullException>();
+    }
+
     [Fact(DisplayName = "AppendEntries response with higher term steps down")]
     [Trait("Category", "Unit")]
     public void AppendEntriesResponseWithHigherTermStepsDown()

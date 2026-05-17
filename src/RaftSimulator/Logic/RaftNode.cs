@@ -147,12 +147,12 @@ internal sealed class RaftNode : IRaftNode
 
         if (action.Type == TimeoutActionType.Heartbeats)
         {
-            await SendHeartbeatsAsync(new Term(action.Term), cancellationToken).ConfigureAwait(false);
+            await SendHeartbeatsAsync(action.Term, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         await _electionRunner
-            .StartElectionAsync(new Term(action.Term), new CandidateId(Id), HandleVoteResponseAsync, cancellationToken)
+            .StartElectionAsync(action.Term, new CandidateId(Id), HandleVoteResponseAsync, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -196,7 +196,7 @@ internal sealed class RaftNode : IRaftNode
 
         if (decision.BecameLeader)
         {
-            await SendHeartbeatsAsync(new Term(decision.Term), cancellationToken).ConfigureAwait(false);
+            await SendHeartbeatsAsync(decision.Term, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -237,7 +237,7 @@ internal sealed class RaftNode : IRaftNode
     {
         lock (_gate)
         {
-            _stateMachine.RegisterHeartbeatAck(peerId, _clock.UtcNow);
+            _stateMachine.RegisterHeartbeatAck(new FromId(peerId), _clock.UtcNow);
         }
     }
 
