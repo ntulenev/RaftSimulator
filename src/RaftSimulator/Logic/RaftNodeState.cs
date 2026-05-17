@@ -55,11 +55,6 @@ internal sealed class RaftNodeState
     public DateTimeOffset NextHeartbeatAt { get; set; }
 
     /// <summary>
-    /// Gets or sets last term for which election status was reported.
-    /// </summary>
-    public Term? LastReportedTerm { get; set; }
-
-    /// <summary>
     /// Gets last successful heartbeat acknowledgement time by peer identifier.
     /// </summary>
     public Dictionary<int, DateTimeOffset> LastHeartbeatAckAt { get; } = [];

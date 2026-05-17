@@ -42,7 +42,7 @@ internal sealed class RaftStateMachine
         State.LeaderId = null;
         State.VotesReceived = 0;
         ResetLeaderTracking();
-        State.LastReportedTerm = null;
+        _statusReporter.Reset();
         ScheduleElection(now, electionTimeout);
         ScheduleHeartbeat(now, heartbeatInterval);
     }
@@ -133,10 +133,7 @@ internal sealed class RaftStateMachine
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, true);
             events.Add(new HeartbeatReceivedEvent(request.LeaderId.Value, State.CurrentTerm.Value));
 
-            if (TryGetElectionStatusSnapshot(out var snapshot))
-            {
-                statusSnapshot = snapshot;
-            }
+            statusSnapshot = _statusReporter.GetSnapshotToPublish(GetStatus());
         }
 
         return new AppendEntriesDecision(response, events, statusSnapshot);
@@ -218,10 +215,7 @@ internal sealed class RaftStateMachine
                 becameLeader = true;
                 term = State.CurrentTerm.Value;
 
-                if (TryGetElectionStatusSnapshot(out var snapshot))
-                {
-                    statusSnapshot = snapshot;
-                }
+                statusSnapshot = _statusReporter.GetSnapshotToPublish(GetStatus());
             }
         }
 
@@ -360,22 +354,8 @@ internal sealed class RaftStateMachine
     private void ScheduleHeartbeat(DateTimeOffset now, TimeSpan heartbeatInterval) =>
         State.NextHeartbeatAt = now + heartbeatInterval;
 
-    private bool TryGetElectionStatusSnapshot(out RaftStatus snapshot)
-    {
-        if (State.LeaderId is null ||
-            (State.LastReportedTerm is not null &&
-             State.CurrentTerm.Value <= State.LastReportedTerm.Value.Value))
-        {
-            snapshot = default!;
-            return false;
-        }
-
-        State.LastReportedTerm = State.CurrentTerm;
-        snapshot = new RaftStatus(Id, State.CurrentTerm, State.Role, State.LeaderId);
-        return true;
-    }
-
     private readonly RaftSettings _settings;
+    private readonly RaftStatusReporter _statusReporter = new();
 
     private RaftNodeState State { get; } = new();
 }
