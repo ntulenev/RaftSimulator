@@ -45,6 +45,7 @@ public sealed class RaftApplicationBuilderExtensionsTests
         settings.NodeId.Should().Be(1);
         provider.GetRequiredService<IOptions<RaftOptions>>().Value.NodeId.Should().Be(1);
         provider.GetRequiredService<RaftSettings>().NodeId.Should().Be(1);
+        provider.GetRequiredService<IRaftNodeRuntime>().Should().BeOfType<RaftNodeRuntime>();
         provider.GetRequiredService<IRaftElectionRunner>().Should().BeOfType<RaftElectionRunner>();
         provider.GetRequiredService<IRaftHeartbeatRunner>().Should().BeOfType<RaftHeartbeatRunner>();
         provider.GetRequiredService<IRaftNode>().Should().BeOfType<RaftNode>();

@@ -123,9 +123,11 @@ public sealed class RaftNodeRuntimeTests
             eventLog,
             clock,
             new FixedDelayProvider(),
-            new TimeoutSequenceScheduler(
+            new RaftNodeRuntime(
+                new TimeoutSequenceScheduler(
                 () => clock.Advance(TimeSpan.FromSeconds(5)),
                 () => clock.Advance(TimeSpan.FromSeconds(2))),
+                new TestRaftLog()),
             electionRunner,
             new SpyHeartbeatRunner());
 
@@ -182,7 +184,7 @@ public sealed class RaftNodeRuntimeTests
                 EventLog,
                 Clock,
                 new FixedDelayProvider(),
-                Scheduler,
+                new RaftNodeRuntime(Scheduler, Log),
                 ElectionRunner,
                 HeartbeatRunner);
         }

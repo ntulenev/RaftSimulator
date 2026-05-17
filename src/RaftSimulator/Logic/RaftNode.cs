@@ -18,7 +18,7 @@ internal sealed class RaftNode : IRaftNode
     /// <param name="eventLog">Event log sink.</param>
     /// <param name="clock">Clock.</param>
     /// <param name="delayProvider">Delay provider.</param>
-    /// <param name="scheduler">Runtime scheduler.</param>
+    /// <param name="runtime">Runtime loop.</param>
     /// <param name="electionRunner">Election runner.</param>
     /// <param name="heartbeatRunner">Heartbeat runner.</param>
     public RaftNode(
@@ -27,7 +27,7 @@ internal sealed class RaftNode : IRaftNode
         IRaftEventLog eventLog,
         IRaftClock clock,
         IRaftDelayProvider delayProvider,
-        IRaftScheduler scheduler,
+        IRaftNodeRuntime runtime,
         IRaftElectionRunner electionRunner,
         IRaftHeartbeatRunner heartbeatRunner)
     {
@@ -36,7 +36,7 @@ internal sealed class RaftNode : IRaftNode
         ArgumentNullException.ThrowIfNull(eventLog);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(delayProvider);
-        ArgumentNullException.ThrowIfNull(scheduler);
+        ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(electionRunner);
         ArgumentNullException.ThrowIfNull(heartbeatRunner);
 
@@ -45,7 +45,7 @@ internal sealed class RaftNode : IRaftNode
         _eventLog = eventLog;
         _clock = clock;
         _delayProvider = delayProvider;
-        _scheduler = scheduler;
+        _runtime = runtime;
         _electionRunner = electionRunner;
         _heartbeatRunner = heartbeatRunner;
         _stateMachine = new RaftStateMachine(settings);
@@ -55,35 +55,13 @@ internal sealed class RaftNode : IRaftNode
     public int Id => _settings.NodeId;
 
     /// <inheritdoc />
-    public async Task RunAsync(CancellationToken cancellationToken)
-    {
-        InitializeState();
-        _log.WriteNode(Id, "Started as follower.");
-
-        try
-        {
-            while (true)
-            {
-                var waitResult = await _scheduler
-                    .WaitAsync(GetNextDelay, cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (waitResult == RaftScheduleWaitResult.Signaled)
-                {
-                    continue;
-                }
-
-                await HandleTimeoutAsync(cancellationToken).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            _log.WriteNode(Id, "Stopped.");
-        }
-    }
+    public Task RunAsync(CancellationToken cancellationToken) =>
+        _runtime.RunAsync(
+            Id,
+            InitializeState,
+            GetNextDelay,
+            HandleTimeoutAsync,
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<RaftVoteResponse> OnRequestVoteAsync(
@@ -253,7 +231,7 @@ internal sealed class RaftNode : IRaftNode
         _delayProvider.GetDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
 
     private void SignalScheduleChangeUnsafe() =>
-        _scheduler.Signal();
+        _runtime.Signal();
 
     private void RegisterHeartbeatAck(int peerId)
     {
@@ -316,7 +294,7 @@ internal sealed class RaftNode : IRaftNode
     private readonly IRaftEventLog _eventLog;
     private readonly IRaftClock _clock;
     private readonly IRaftDelayProvider _delayProvider;
-    private readonly IRaftScheduler _scheduler;
+    private readonly IRaftNodeRuntime _runtime;
     private readonly RaftStateMachine _stateMachine;
     private readonly IRaftElectionRunner _electionRunner;
     private readonly IRaftHeartbeatRunner _heartbeatRunner;
