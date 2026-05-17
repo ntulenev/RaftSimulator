@@ -1,3 +1,4 @@
+using RaftSimulator.Transport;
 using RaftSimulator.Transport.Models;
 
 namespace RaftSimulator.API;
@@ -23,9 +24,8 @@ internal sealed class RequestVoteValidationFilter : IEndpointFilter
         ArgumentNullException.ThrowIfNull(next);
 
         var request = context.GetArgument<RaftVoteRequestDto>(0);
-        return request.Term > 0 && request.CandidateId > 0
+        return RaftDtoValidator.TryValidate(request, out var error)
             ? next(context)
-            : ValueTask.FromResult<object?>(
-                Results.BadRequest("Term and CandidateId must be positive."));
+            : ValueTask.FromResult<object?>(Results.BadRequest(error));
     }
 }
