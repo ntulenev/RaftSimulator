@@ -1,4 +1,4 @@
-namespace RaftSimulator.Transport;
+namespace RaftSimulator.Logic;
 
 /// <summary>
 /// Formats peer RPC log messages.

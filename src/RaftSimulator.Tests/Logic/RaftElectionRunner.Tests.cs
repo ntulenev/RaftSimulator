@@ -4,7 +4,6 @@ using RaftSimulator.Abstractions;
 using RaftSimulator.Logic;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
-using RaftSimulator.Transport;
 
 namespace RaftSimulator.Tests.Logic;
 

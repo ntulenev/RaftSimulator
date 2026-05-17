@@ -2,7 +2,7 @@ using FluentAssertions;
 
 using RaftSimulator.Abstractions;
 using RaftSimulator.Logic;
-using RaftSimulator.Logic.Events;
+using RaftSimulator.Models.Domain.Events;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
 

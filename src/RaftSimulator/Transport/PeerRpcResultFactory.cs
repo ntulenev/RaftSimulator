@@ -1,3 +1,4 @@
+using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Configuration;
 
 namespace RaftSimulator.Transport;

@@ -1,6 +1,6 @@
 using RaftSimulator.Models.Configuration;
 
-namespace RaftSimulator.Transport;
+namespace RaftSimulator.Abstractions;
 
 /// <summary>
 /// Result of a raft RPC call to a peer.

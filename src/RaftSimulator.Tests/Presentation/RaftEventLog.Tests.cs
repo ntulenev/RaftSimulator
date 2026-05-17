@@ -1,7 +1,7 @@
 using Moq;
 
 using RaftSimulator.Abstractions;
-using RaftSimulator.Logic.Events;
+using RaftSimulator.Models.Domain.Events;
 using RaftSimulator.Presentation;
 
 namespace RaftSimulator.Tests.Presentation;

@@ -1,6 +1,5 @@
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Domain;
-using RaftSimulator.Transport;
 
 namespace RaftSimulator.Logic;
 

@@ -1,4 +1,4 @@
-namespace RaftSimulator.Logic.Events;
+namespace RaftSimulator.Models.Domain.Events;
 
 /// <summary>
 /// Event emitted when the leader cannot reach quorum.

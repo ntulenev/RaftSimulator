@@ -1,4 +1,4 @@
-namespace RaftSimulator.Logic.Events;
+namespace RaftSimulator.Models.Domain.Events;
 
 /// <summary>
 /// Event emitted when an incoming vote request is denied.

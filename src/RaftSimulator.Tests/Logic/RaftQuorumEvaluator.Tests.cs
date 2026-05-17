@@ -1,7 +1,7 @@
 using FluentAssertions;
 
 using RaftSimulator.Logic;
-using RaftSimulator.Logic.Events;
+using RaftSimulator.Models.Domain.Events;
 using RaftSimulator.Models.Configuration;
 
 namespace RaftSimulator.Tests.Logic;

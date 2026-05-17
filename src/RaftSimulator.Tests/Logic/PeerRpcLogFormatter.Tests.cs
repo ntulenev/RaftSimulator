@@ -1,8 +1,8 @@
 using FluentAssertions;
 
-using RaftSimulator.Transport;
+using RaftSimulator.Logic;
 
-namespace RaftSimulator.Tests.Transport;
+namespace RaftSimulator.Tests.Logic;
 
 public sealed class PeerRpcLogFormatterTests
 {

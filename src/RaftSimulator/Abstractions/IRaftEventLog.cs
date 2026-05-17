@@ -1,4 +1,4 @@
-using RaftSimulator.Logic.Events;
+using RaftSimulator.Models.Domain.Events;
 
 namespace RaftSimulator.Abstractions;
 
