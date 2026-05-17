@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace RaftSimulator.Models.Configuration;
 
 /// <summary>
@@ -7,7 +5,7 @@ namespace RaftSimulator.Models.Configuration;
 /// </summary>
 internal sealed class RaftSettings
 {
-    private RaftSettings(
+    internal RaftSettings(
         int nodeId,
         int port,
         IReadOnlyList<PeerInfo> peers,
@@ -86,62 +84,6 @@ internal sealed class RaftSettings
     /// <returns>Settings.</returns>
     public static RaftSettings FromOptions(RaftOptions options)
     {
-        ArgumentNullException.ThrowIfNull(options);
-
-        var validationResults = new List<ValidationResult>();
-        var validationContext = new ValidationContext(options);
-        if (!Validator.TryValidateObject(
-            options,
-            validationContext,
-            validationResults,
-            validateAllProperties: true))
-        {
-            var message = string.Join(
-                " ",
-                validationResults.Select(static result => result.ErrorMessage));
-            throw new InvalidOperationException(message);
-        }
-
-        if (options.MaxElectionSeconds < options.MinElectionSeconds)
-        {
-            throw new InvalidOperationException(
-                "Raft:MaxElectionSeconds must be >= Raft:MinElectionSeconds.");
-        }
-
-        if (options.MaxNetworkDelaySeconds < options.MinNetworkDelaySeconds)
-        {
-            throw new InvalidOperationException(
-                "Raft:MaxNetworkDelaySeconds must be >= Raft:MinNetworkDelaySeconds.");
-        }
-
-        var peers = PeerInfo.ParseList(options.Peers);
-        var peerIds = new HashSet<int>(peers.Select(static peer => peer.Id));
-        var nodeCount = peerIds.Contains(options.NodeId)
-            ? peerIds.Count
-            : peerIds.Count + 1;
-
-        if (nodeCount < 3)
-        {
-            throw new InvalidOperationException("RAFT requires at least 3 nodes.");
-        }
-
-        peers = [.. peers.Where(peer => peer.Id != options.NodeId)];
-
-        var heartbeat = TimeSpan.FromSeconds(options.HeartbeatSeconds);
-        var minElection = TimeSpan.FromSeconds(options.MinElectionSeconds);
-        var maxElection = TimeSpan.FromSeconds(options.MaxElectionSeconds);
-        var minDelay = TimeSpan.FromSeconds(options.MinNetworkDelaySeconds);
-        var maxDelay = TimeSpan.FromSeconds(options.MaxNetworkDelaySeconds);
-
-        return new RaftSettings(
-            options.NodeId,
-            options.Port,
-            peers,
-            nodeCount,
-            heartbeat,
-            minElection,
-            maxElection,
-            minDelay,
-            maxDelay);
+        return RaftSettingsFactory.FromOptions(options);
     }
 }
