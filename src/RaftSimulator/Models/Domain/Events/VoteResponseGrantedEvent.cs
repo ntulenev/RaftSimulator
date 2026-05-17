@@ -11,9 +11,11 @@ internal sealed record VoteResponseGrantedEvent : RaftEvent
     /// <param name="fromId">Peer node identifier.</param>
     /// <param name="totalVotes">Total votes received.</param>
     /// <param name="majority">Majority threshold.</param>
-    public VoteResponseGrantedEvent(int fromId, int totalVotes, int majority)
+    public VoteResponseGrantedEvent(FromId fromId, int totalVotes, int majority)
     {
-        FromId = DomainEventGuard.RequireNodeId(fromId, nameof(fromId), "Peer id");
+        ArgumentNullException.ThrowIfNull(fromId);
+
+        FromId = fromId;
         TotalVotes = DomainEventGuard.RequirePositiveCount(totalVotes, nameof(totalVotes), "Total votes");
         Majority = DomainEventGuard.RequirePositiveCount(majority, nameof(majority), "Majority");
 
@@ -26,7 +28,7 @@ internal sealed record VoteResponseGrantedEvent : RaftEvent
     /// <summary>
     /// Gets peer node identifier.
     /// </summary>
-    public int FromId { get; }
+    public FromId FromId { get; }
 
     /// <summary>
     /// Gets total votes received.

@@ -9,13 +9,15 @@ internal sealed record BecameLeaderEvent : RaftEvent
     /// Initializes a new instance of the <see cref="BecameLeaderEvent"/> class.
     /// </summary>
     /// <param name="term">Leader term.</param>
-    public BecameLeaderEvent(int term)
+    public BecameLeaderEvent(Term term)
     {
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
+        ArgumentNullException.ThrowIfNull(term);
+
+        Term = term;
     }
 
     /// <summary>
     /// Gets leader term.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 }

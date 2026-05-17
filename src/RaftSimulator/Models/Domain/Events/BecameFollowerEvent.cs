@@ -10,21 +10,21 @@ internal sealed record BecameFollowerEvent : RaftEvent
     /// </summary>
     /// <param name="term">Current term.</param>
     /// <param name="leaderId">Known leader identifier.</param>
-    public BecameFollowerEvent(int term, int? leaderId)
+    public BecameFollowerEvent(Term term, LeaderId? leaderId)
     {
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
-        LeaderId = leaderId is null
-            ? null
-            : DomainEventGuard.RequireNodeId(leaderId.Value, nameof(leaderId), "Leader id");
+        ArgumentNullException.ThrowIfNull(term);
+
+        Term = term;
+        LeaderId = leaderId;
     }
 
     /// <summary>
     /// Gets current term.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 
     /// <summary>
     /// Gets known leader identifier.
     /// </summary>
-    public int? LeaderId { get; }
+    public LeaderId? LeaderId { get; }
 }

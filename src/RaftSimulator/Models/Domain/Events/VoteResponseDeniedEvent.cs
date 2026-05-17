@@ -10,19 +10,22 @@ internal sealed record VoteResponseDeniedEvent : RaftEvent
     /// </summary>
     /// <param name="fromId">Peer node identifier.</param>
     /// <param name="term">Current term.</param>
-    public VoteResponseDeniedEvent(int fromId, int term)
+    public VoteResponseDeniedEvent(FromId fromId, Term term)
     {
-        FromId = DomainEventGuard.RequireNodeId(fromId, nameof(fromId), "Peer id");
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
+        ArgumentNullException.ThrowIfNull(fromId);
+        ArgumentNullException.ThrowIfNull(term);
+
+        FromId = fromId;
+        Term = term;
     }
 
     /// <summary>
     /// Gets peer node identifier.
     /// </summary>
-    public int FromId { get; }
+    public FromId FromId { get; }
 
     /// <summary>
     /// Gets current term.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 }

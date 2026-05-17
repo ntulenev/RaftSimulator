@@ -10,19 +10,22 @@ internal sealed record RequestVoteDeniedEvent : RaftEvent
     /// </summary>
     /// <param name="candidateId">Candidate node identifier.</param>
     /// <param name="term">Term used in the log message.</param>
-    public RequestVoteDeniedEvent(int candidateId, int term)
+    public RequestVoteDeniedEvent(CandidateId candidateId, Term term)
     {
-        CandidateId = DomainEventGuard.RequireNodeId(candidateId, nameof(candidateId), "Candidate id");
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
+        ArgumentNullException.ThrowIfNull(candidateId);
+        ArgumentNullException.ThrowIfNull(term);
+
+        CandidateId = candidateId;
+        Term = term;
     }
 
     /// <summary>
     /// Gets candidate node identifier.
     /// </summary>
-    public int CandidateId { get; }
+    public CandidateId CandidateId { get; }
 
     /// <summary>
     /// Gets term used in the log message.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 }

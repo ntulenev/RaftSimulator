@@ -1,5 +1,6 @@
 using FluentAssertions;
 
+using RaftSimulator.Models.Domain;
 using RaftSimulator.Models.Domain.Events;
 
 namespace RaftSimulator.Tests.Models.Domain;
@@ -51,7 +52,7 @@ public sealed class RaftDomainEventsTests
         var raftEvent = new BecameFollowerEvent(2, null);
 
         // Assert
-        raftEvent.Term.Should().Be(2);
+        raftEvent.Term.Should().Be(new Term(2));
         raftEvent.LeaderId.Should().BeNull();
     }
 

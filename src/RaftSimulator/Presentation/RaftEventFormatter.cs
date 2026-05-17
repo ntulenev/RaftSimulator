@@ -18,16 +18,16 @@ internal static class RaftEventFormatter
 
         return raftEvent switch
         {
-            RequestVoteDeniedEvent e => $"Denied vote to Node {e.CandidateId:00} (term {e.Term}).",
-            RequestVoteGrantedEvent e => $"Granted vote to Node {e.CandidateId:00} (term {e.Term}).",
+            RequestVoteDeniedEvent e => $"Denied vote to Node {e.CandidateId.Value:00} (term {e.Term}).",
+            RequestVoteGrantedEvent e => $"Granted vote to Node {e.CandidateId.Value:00} (term {e.Term}).",
             BecameFollowerEvent e => FormatBecameFollower(e),
-            HeartbeatIgnoredEvent e => $"Ignored heartbeat from Node {e.LeaderId:00} (term {e.Term}).",
-            HeartbeatReceivedEvent e => $"Heartbeat from Node {e.LeaderId:00} (term {e.Term}).",
+            HeartbeatIgnoredEvent e => $"Ignored heartbeat from Node {e.LeaderId.Value:00} (term {e.Term}).",
+            HeartbeatReceivedEvent e => $"Heartbeat from Node {e.LeaderId.Value:00} (term {e.Term}).",
             LeaderHeartbeatEvent => "Leader heartbeat.",
             ElectionTimeoutEvent e => $"Election timeout. Term {e.Term}, becoming candidate.",
-            HigherTermDiscoveredEvent e => $"Discovered higher term {e.Term} from Node {e.FromId:00}.",
-            VoteResponseDeniedEvent e => $"Vote denied by Node {e.FromId:00} (term {e.Term}).",
-            VoteResponseGrantedEvent e => $"Vote granted by Node {e.FromId:00}. Total={e.TotalVotes}/{e.Majority}.",
+            HigherTermDiscoveredEvent e => $"Discovered higher term {e.Term} from Node {e.FromId.Value:00}.",
+            VoteResponseDeniedEvent e => $"Vote denied by Node {e.FromId.Value:00} (term {e.Term}).",
+            VoteResponseGrantedEvent e => $"Vote granted by Node {e.FromId.Value:00}. Total={e.TotalVotes}/{e.Majority}.",
             BecameLeaderEvent e => $"Became leader for term {e.Term}.",
             OutOfQuorumEvent e => $"Cluster out of quorum: {e.Reachable}/{e.Total} (need {e.Needed}).",
             _ => throw new ArgumentOutOfRangeException(nameof(raftEvent), raftEvent, "Unknown event.")
@@ -36,7 +36,7 @@ internal static class RaftEventFormatter
 
     private static string FormatBecameFollower(BecameFollowerEvent raftEvent)
     {
-        var leaderText = raftEvent.LeaderId is null ? "unknown" : $"Node {raftEvent.LeaderId:00}";
+        var leaderText = raftEvent.LeaderId is null ? "unknown" : $"Node {raftEvent.LeaderId.Value:00}";
         return $"Became follower for term {raftEvent.Term} (leader {leaderText}).";
     }
 }

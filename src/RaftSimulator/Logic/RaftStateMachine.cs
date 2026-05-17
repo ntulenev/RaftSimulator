@@ -60,7 +60,7 @@ internal sealed class RaftStateMachine
         if (request.IsStaleFor(State.CurrentTerm))
         {
             response = new RaftVoteResponse(State.CurrentTerm, Id, false);
-            events.Add(new RequestVoteDeniedEvent(request.CandidateId.Value, request.Term.Value));
+            events.Add(new RequestVoteDeniedEvent(request.CandidateId, request.Term));
         }
         else
         {
@@ -73,8 +73,8 @@ internal sealed class RaftStateMachine
 
             response = new RaftVoteResponse(State.CurrentTerm, Id, canVote);
             events.Add(canVote
-                ? new RequestVoteGrantedEvent(request.CandidateId.Value, State.CurrentTerm.Value)
-                : new RequestVoteDeniedEvent(request.CandidateId.Value, State.CurrentTerm.Value));
+                ? new RequestVoteGrantedEvent(request.CandidateId, State.CurrentTerm)
+                : new RequestVoteDeniedEvent(request.CandidateId, State.CurrentTerm));
         }
 
         return new VoteDecision(response, events);
@@ -101,7 +101,7 @@ internal sealed class RaftStateMachine
         if (request.IsStaleFor(State.CurrentTerm))
         {
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, false);
-            events.Add(new HeartbeatIgnoredEvent(request.LeaderId.Value, request.Term.Value));
+            events.Add(new HeartbeatIgnoredEvent(request.LeaderId, request.Term));
         }
         else
         {
@@ -117,7 +117,7 @@ internal sealed class RaftStateMachine
             State.AcceptHeartbeat(request, now, electionTimeout);
 
             response = new RaftAppendEntriesResponse(State.CurrentTerm, Id, true);
-            events.Add(new HeartbeatReceivedEvent(request.LeaderId.Value, State.CurrentTerm.Value));
+            events.Add(new HeartbeatReceivedEvent(request.LeaderId, State.CurrentTerm));
 
             statusSnapshot = _statusReporter.GetSnapshotToPublish(GetStatus());
         }
@@ -151,7 +151,7 @@ internal sealed class RaftStateMachine
         return new TimeoutAction(
             TimeoutActionType.Election,
             State.CurrentTerm,
-            [new ElectionTimeoutEvent(State.CurrentTerm.Value)]);
+            [new ElectionTimeoutEvent(State.CurrentTerm)]);
     }
 
     /// <summary>
@@ -175,7 +175,7 @@ internal sealed class RaftStateMachine
 
         if (response.HasHigherTermThan(State.CurrentTerm))
         {
-            events.Add(new HigherTermDiscoveredEvent(response.Term.Value, response.FromId.Value));
+            events.Add(new HigherTermDiscoveredEvent(response.Term, response.FromId));
             events.Add(BecomeFollower(response.Term.Value, null, now, electionTimeout));
         }
         else if (State.Role != RaftRole.Candidate || !response.IsForTerm(State.CurrentTerm))
@@ -184,20 +184,20 @@ internal sealed class RaftStateMachine
         }
         else if (!response.Granted)
         {
-            events.Add(new VoteResponseDeniedEvent(response.FromId.Value, State.CurrentTerm.Value));
+            events.Add(new VoteResponseDeniedEvent(response.FromId, State.CurrentTerm));
         }
         else
         {
             var votesReceived = State.RecordGrantedVote();
             events.Add(new VoteResponseGrantedEvent(
-                response.FromId.Value,
+                response.FromId,
                 votesReceived,
                 _settings.Majority));
 
             if (State.HasMajority(_settings.Majority))
             {
                 State.BecomeLeader(Id, _settings.Majority, now);
-                events.Add(new BecameLeaderEvent(State.CurrentTerm.Value));
+                events.Add(new BecameLeaderEvent(State.CurrentTerm));
                 becameLeader = true;
                 term = State.CurrentTerm;
 
@@ -229,7 +229,7 @@ internal sealed class RaftStateMachine
 
         var events = new RaftEvent[]
         {
-            new HigherTermDiscoveredEvent(response.Term.Value, response.FromId.Value),
+            new HigherTermDiscoveredEvent(response.Term, response.FromId),
             BecomeFollower(response.Term.Value, null, now, electionTimeout)
         };
 
@@ -297,7 +297,9 @@ internal sealed class RaftStateMachine
         TimeSpan electionTimeout)
     {
         State.BecomeFollower(term, leaderId, now, electionTimeout);
-        return new BecameFollowerEvent(State.CurrentTerm.Value, leaderId);
+        return new BecameFollowerEvent(
+            State.CurrentTerm,
+            leaderId is null ? null : new LeaderId(leaderId.Value));
     }
 
     private readonly RaftSettings _settings;

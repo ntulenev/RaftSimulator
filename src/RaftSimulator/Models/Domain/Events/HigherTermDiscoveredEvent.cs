@@ -10,19 +10,22 @@ internal sealed record HigherTermDiscoveredEvent : RaftEvent
     /// </summary>
     /// <param name="term">Higher term.</param>
     /// <param name="fromId">Peer node identifier.</param>
-    public HigherTermDiscoveredEvent(int term, int fromId)
+    public HigherTermDiscoveredEvent(Term term, FromId fromId)
     {
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
-        FromId = DomainEventGuard.RequireNodeId(fromId, nameof(fromId), "Peer id");
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(fromId);
+
+        Term = term;
+        FromId = fromId;
     }
 
     /// <summary>
     /// Gets higher term.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 
     /// <summary>
     /// Gets peer node identifier.
     /// </summary>
-    public int FromId { get; }
+    public FromId FromId { get; }
 }

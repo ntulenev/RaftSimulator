@@ -9,13 +9,15 @@ internal sealed record ElectionTimeoutEvent : RaftEvent
     /// Initializes a new instance of the <see cref="ElectionTimeoutEvent"/> class.
     /// </summary>
     /// <param name="term">New election term.</param>
-    public ElectionTimeoutEvent(int term)
+    public ElectionTimeoutEvent(Term term)
     {
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
+        ArgumentNullException.ThrowIfNull(term);
+
+        Term = term;
     }
 
     /// <summary>
     /// Gets new election term.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 }

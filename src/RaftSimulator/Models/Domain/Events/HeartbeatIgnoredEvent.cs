@@ -10,19 +10,22 @@ internal sealed record HeartbeatIgnoredEvent : RaftEvent
     /// </summary>
     /// <param name="leaderId">Leader node identifier from the request.</param>
     /// <param name="term">Request term.</param>
-    public HeartbeatIgnoredEvent(int leaderId, int term)
+    public HeartbeatIgnoredEvent(LeaderId leaderId, Term term)
     {
-        LeaderId = DomainEventGuard.RequireNodeId(leaderId, nameof(leaderId), "Leader id");
-        Term = DomainEventGuard.RequireTerm(term, nameof(term));
+        ArgumentNullException.ThrowIfNull(leaderId);
+        ArgumentNullException.ThrowIfNull(term);
+
+        LeaderId = leaderId;
+        Term = term;
     }
 
     /// <summary>
     /// Gets leader node identifier from the request.
     /// </summary>
-    public int LeaderId { get; }
+    public LeaderId LeaderId { get; }
 
     /// <summary>
     /// Gets request term.
     /// </summary>
-    public int Term { get; }
+    public Term Term { get; }
 }
