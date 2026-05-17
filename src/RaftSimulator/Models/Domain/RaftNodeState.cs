@@ -12,6 +12,76 @@ internal sealed class RaftNodeState
     {
     }
 
+    internal void InitializeFollower(
+        DateTimeOffset now,
+        TimeSpan electionTimeout,
+        TimeSpan heartbeatInterval)
+    {
+        Role = RaftRole.Follower;
+        CurrentTerm = Term.Initial;
+        VotedFor = null;
+        LeaderId = null;
+        VotesReceived = 0;
+        ResetLeaderTracking();
+        ScheduleElection(now, electionTimeout);
+        ScheduleHeartbeat(now, heartbeatInterval);
+    }
+
+    internal void StartElection(int nodeId, DateTimeOffset now, TimeSpan electionTimeout)
+    {
+        Role = RaftRole.Candidate;
+        CurrentTerm = CurrentTerm.Next();
+        VotedFor = new CandidateId(nodeId);
+        VotesReceived = 1;
+        LeaderId = null;
+        ScheduleElection(now, electionTimeout);
+    }
+
+    internal void BecomeLeader(int nodeId, DateTimeOffset now)
+    {
+        Role = RaftRole.Leader;
+        LeaderId = new LeaderId(nodeId);
+        VotesReceived = 0;
+        NextHeartbeatAt = now;
+        LeaderSince = now;
+        LastHeartbeatAckAt.Clear();
+    }
+
+    internal void BecomeFollower(
+        int term,
+        int? leaderId,
+        DateTimeOffset now,
+        TimeSpan electionTimeout)
+    {
+        Role = RaftRole.Follower;
+        LeaderId = leaderId is null ? null : new LeaderId(leaderId.Value);
+        VotesReceived = 0;
+        ResetLeaderTracking();
+
+        if (term > CurrentTerm.Value)
+        {
+            CurrentTerm = new Term(term);
+            VotedFor = null;
+        }
+
+        ScheduleElection(now, electionTimeout);
+    }
+
+    internal void ScheduleElection(DateTimeOffset now, TimeSpan electionTimeout) =>
+        NextElectionDeadline = now + electionTimeout;
+
+    internal void ScheduleHeartbeat(DateTimeOffset now, TimeSpan heartbeatInterval) =>
+        NextHeartbeatAt = now + heartbeatInterval;
+
+    internal void RegisterHeartbeatAck(int peerId, DateTimeOffset now) =>
+        LastHeartbeatAckAt[peerId] = now;
+
+    private void ResetLeaderTracking()
+    {
+        LeaderSince = default;
+        LastHeartbeatAckAt.Clear();
+    }
+
     /// <summary>
     /// Gets or sets current node role.
     /// </summary>
