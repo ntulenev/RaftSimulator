@@ -5,9 +5,27 @@ namespace RaftSimulator.Models.Domain;
 /// <summary>
 /// Response sender node identifier value object.
 /// </summary>
-/// <param name="Value">Sender identifier value.</param>
-internal readonly record struct FromId(int Value) : IFormattable
+internal sealed record FromId : IFormattable
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FromId"/> class.
+    /// </summary>
+    /// <param name="value">Sender identifier value.</param>
+    public FromId(int value)
+    {
+        if (value < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Sender id must be >= 1.");
+        }
+
+        Value = value;
+    }
+
+    /// <summary>
+    /// Gets sender identifier value.
+    /// </summary>
+    public int Value { get; }
+
     /// <inheritdoc />
     public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);
 

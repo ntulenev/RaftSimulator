@@ -86,5 +86,42 @@ public sealed class RaftDomainModelsTests
         term.ToString("00", null).Should().Be("06");
     }
 
+    [Theory(DisplayName = "Node identifier value objects reject non-positive values")]
+    [Trait("Category", "Unit")]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void NodeIdentifierValueObjectsRejectNonPositiveValues(int value)
+    {
+        // Act
+        Action[] acts =
+        [
+            () => _ = new NodeId(value),
+            () => _ = new CandidateId(value),
+            () => _ = new LeaderId(value),
+            () => _ = new FromId(value)
+        ];
+
+        // Assert
+        foreach (var act in acts)
+        {
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+    }
+
+    [Fact(DisplayName = "Term rejects negative values and advances itself")]
+    [Trait("Category", "Unit")]
+    public void TermRejectsNegativeValuesAndAdvancesItself()
+    {
+        // Act
+        var next = Term.Initial.Next();
+        var negative = () => new Term(-1);
+
+        // Assert
+        next.Should().Be(new Term(1));
+        next.IsNewerThan(Term.Initial).Should().BeTrue();
+        Term.Initial.IsOlderThan(next).Should().BeTrue();
+        negative.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     private static readonly string[] ExpectedRoles = ["Follower", "Candidate", "Leader"];
 }

@@ -23,7 +23,7 @@ internal sealed class RaftStatusReporter
         ArgumentNullException.ThrowIfNull(status);
 
         if (status.LeaderId is null ||
-            (_lastReportedTerm is not null && status.Term.Value <= _lastReportedTerm.Value.Value))
+            (_lastReportedTerm is not null && !status.Term.IsNewerThan(_lastReportedTerm)))
         {
             return null;
         }

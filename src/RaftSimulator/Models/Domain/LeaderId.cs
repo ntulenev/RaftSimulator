@@ -5,9 +5,27 @@ namespace RaftSimulator.Models.Domain;
 /// <summary>
 /// Leader node identifier value object.
 /// </summary>
-/// <param name="Value">Leader identifier value.</param>
-internal readonly record struct LeaderId(int Value) : IFormattable
+internal sealed record LeaderId : IFormattable
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LeaderId"/> class.
+    /// </summary>
+    /// <param name="value">Leader identifier value.</param>
+    public LeaderId(int value)
+    {
+        if (value < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Leader id must be >= 1.");
+        }
+
+        Value = value;
+    }
+
+    /// <summary>
+    /// Gets leader identifier value.
+    /// </summary>
+    public int Value { get; }
+
     /// <inheritdoc />
     public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);
 

@@ -20,7 +20,7 @@ internal sealed class RaftNodeState
     /// <summary>
     /// Gets or sets current term.
     /// </summary>
-    public Term CurrentTerm { get; set; }
+    public Term CurrentTerm { get; set; } = Term.Initial;
 
     /// <summary>
     /// Gets or sets node voted for in the current term.

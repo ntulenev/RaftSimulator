@@ -5,9 +5,27 @@ namespace RaftSimulator.Models.Domain;
 /// <summary>
 /// Candidate node identifier value object.
 /// </summary>
-/// <param name="Value">Candidate identifier value.</param>
-internal readonly record struct CandidateId(int Value) : IFormattable
+internal sealed record CandidateId : IFormattable
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CandidateId"/> class.
+    /// </summary>
+    /// <param name="value">Candidate identifier value.</param>
+    public CandidateId(int value)
+    {
+        if (value < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Candidate id must be >= 1.");
+        }
+
+        Value = value;
+    }
+
+    /// <summary>
+    /// Gets candidate identifier value.
+    /// </summary>
+    public int Value { get; }
+
     /// <inheritdoc />
     public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);
 
