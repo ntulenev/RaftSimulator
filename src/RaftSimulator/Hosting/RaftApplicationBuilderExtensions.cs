@@ -35,6 +35,7 @@ internal static class RaftApplicationBuilderExtensions
         _ = builder.Services.AddSingleton<IRaftDelayProvider, RaftDelayProvider>();
         _ = builder.Services.AddSingleton<IRaftScheduler, RaftScheduler>();
         _ = builder.Services.AddSingleton<IRaftNodeRuntime, RaftNodeRuntime>();
+        _ = builder.Services.AddSingleton<RaftNodeCoordinator>();
         _ = builder.Services.AddSingleton<IRaftLog, SpectreRaftLog>();
         _ = builder.Services.AddSingleton<IRaftEventLog, RaftEventLog>();
         _ = builder.Services.AddSingleton<IRaftPeerBroadcaster, RaftPeerBroadcaster>();

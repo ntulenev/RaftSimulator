@@ -118,18 +118,22 @@ public sealed class RaftNodeRuntimeTests
                 new RaftVoteResponse(new Term(1), new FromId(settings.Peers[0].Id), true)
             ]
         };
+        var runtime = new RaftNodeRuntime(
+            new TimeoutSequenceScheduler(
+                cancellation,
+                () => clock.Advance(TimeSpan.FromSeconds(5)),
+                () => clock.Advance(TimeSpan.FromSeconds(2))),
+            new TestRaftLog());
         var node = new RaftNode(
             settings,
             new TestRaftLog(),
             eventLog,
-            clock,
-            new FixedDelayProvider(),
-            new RaftNodeRuntime(
-                new TimeoutSequenceScheduler(
-                    cancellation,
-                    () => clock.Advance(TimeSpan.FromSeconds(5)),
-                    () => clock.Advance(TimeSpan.FromSeconds(2))),
-                new TestRaftLog()),
+            runtime,
+            new RaftNodeCoordinator(
+                settings,
+                clock,
+                new FixedDelayProvider(),
+                runtime),
             electionRunner,
             new SpyHeartbeatRunner());
 
@@ -180,13 +184,17 @@ public sealed class RaftNodeRuntimeTests
         public RuntimeScenario()
         {
             Scheduler = new TimeoutThenCancelScheduler(RunCancellation, () => BeforeTimeout());
+            Runtime = new RaftNodeRuntime(Scheduler, Log);
             Node = new RaftNode(
                 Settings,
                 Log,
                 EventLog,
-                Clock,
-                new FixedDelayProvider(),
-                new RaftNodeRuntime(Scheduler, Log),
+                Runtime,
+                new RaftNodeCoordinator(
+                    Settings,
+                    Clock,
+                    new FixedDelayProvider(),
+                    Runtime),
                 ElectionRunner,
                 HeartbeatRunner);
         }
@@ -198,6 +206,8 @@ public sealed class RaftNodeRuntimeTests
         public CancellationTokenSource RunCancellation { get; } = new();
 
         public TimeoutThenCancelScheduler Scheduler { get; }
+
+        public RaftNodeRuntime Runtime { get; }
 
         public SpyElectionRunner ElectionRunner { get; } = new();
 

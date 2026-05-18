@@ -16,35 +16,32 @@ internal sealed class RaftNode : IRaftNode
     /// <param name="settings">Raft settings.</param>
     /// <param name="log">Log sink.</param>
     /// <param name="eventLog">Event log sink.</param>
-    /// <param name="clock">Clock.</param>
-    /// <param name="delayProvider">Delay provider.</param>
     /// <param name="runtime">Runtime loop.</param>
+    /// <param name="coordinator">Node state coordinator.</param>
     /// <param name="electionRunner">Election runner.</param>
     /// <param name="heartbeatRunner">Heartbeat runner.</param>
     public RaftNode(
         RaftSettings settings,
         IRaftLog log,
         IRaftEventLog eventLog,
-        IRaftClock clock,
-        IRaftDelayProvider delayProvider,
         IRaftNodeRuntime runtime,
+        RaftNodeCoordinator coordinator,
         IRaftElectionRunner electionRunner,
         IRaftHeartbeatRunner heartbeatRunner)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(eventLog);
-        ArgumentNullException.ThrowIfNull(clock);
-        ArgumentNullException.ThrowIfNull(delayProvider);
         ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(coordinator);
         ArgumentNullException.ThrowIfNull(electionRunner);
         ArgumentNullException.ThrowIfNull(heartbeatRunner);
 
         _settings = settings;
         _log = log;
         _eventLog = eventLog;
-        _coordinator = new RaftNodeCoordinator(settings, clock, delayProvider, runtime);
         _runtime = runtime;
+        _coordinator = coordinator;
         _electionRunner = electionRunner;
         _heartbeatRunner = heartbeatRunner;
     }
