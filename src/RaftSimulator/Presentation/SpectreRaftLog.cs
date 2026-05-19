@@ -87,9 +87,8 @@ internal sealed partial class SpectreRaftLog : IRaftLog
 
     private void RenderSnapshot(bool force)
     {
-        Layout layout;
-        Panel statusPanel;
-        Panel logPanel;
+        RaftStatus? latestStatus;
+        string[] lines;
 
         lock (_gate)
         {
@@ -102,26 +101,31 @@ internal sealed partial class SpectreRaftLog : IRaftLog
             }
 
             _lastRenderAt = now;
-            statusPanel = BuildStatusPanel();
-            var maxLines = GetLogLineLimit();
-            logPanel = BuildLogPanel(maxLines);
+            latestStatus = _latestStatus;
+            lines = [.. _lines];
+        }
 
-            layout = new Layout("root")
-                .SplitRows(
-                    new Layout("status").Size(8),
-                    new Layout("logs"));
+        var statusPanel = BuildStatusPanel(latestStatus);
+        var maxLines = GetLogLineLimit();
+        var logPanel = BuildLogPanel(lines, maxLines);
+        var layout = new Layout("root")
+            .SplitRows(
+                new Layout("status").Size(8),
+                new Layout("logs"));
 
-            _ = layout["status"].Update(statusPanel);
-            _ = layout["logs"].Update(logPanel);
+        _ = layout["status"].Update(statusPanel);
+        _ = layout["logs"].Update(logPanel);
 
+        lock (_renderGate)
+        {
             _console.Clear();
             _console.Write(layout);
         }
     }
 
-    private Panel BuildStatusPanel()
+    private static Panel BuildStatusPanel(RaftStatus? latestStatus)
     {
-        if (_latestStatus is null)
+        if (latestStatus is null)
         {
             return new Panel(new Markup("[grey]No election result yet.[/]"))
                 .Header("[bold red]Election Result[/]", Justify.Left)
@@ -130,7 +134,7 @@ internal sealed partial class SpectreRaftLog : IRaftLog
                 .Collapse();
         }
 
-        var status = _latestStatus;
+        var status = latestStatus;
         var grid = new Grid();
         _ = grid.AddColumn(new GridColumn().NoWrap());
         _ = grid.AddColumn();
@@ -148,11 +152,11 @@ internal sealed partial class SpectreRaftLog : IRaftLog
         return panel;
     }
 
-    private Panel BuildLogPanel(int maxLines)
+    private static Panel BuildLogPanel(string[] lines, int maxLines)
     {
-        var content = _lines.Count == 0
+        var content = lines.Length == 0
             ? "[grey]No log entries yet.[/]"
-            : string.Join(Environment.NewLine, _lines.TakeLast(maxLines));
+            : string.Join(Environment.NewLine, lines.TakeLast(maxLines));
 
         return new Panel(new Markup(content))
             .Header("[bold deepskyblue1]Log[/]", Justify.Left)
@@ -220,9 +224,10 @@ internal sealed partial class SpectreRaftLog : IRaftLog
 
     private readonly IAnsiConsole _console;
     private readonly List<string> _lines = [];
+    private readonly Lock _gate = new();
+    private readonly Lock _renderGate = new();
     private RaftStatus? _latestStatus;
     private DateTimeOffset _lastRenderAt;
-    private static readonly Lock _gate = new();
     private static readonly Regex _highlightToken = HighlightTokenRegex();
 
     [GeneratedRegex(@"Node\s+\d{2}|\bterm\s+\d+\b", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
