@@ -40,14 +40,12 @@ internal sealed class RaftNodeCoordinator
     /// </summary>
     public void InitializeState()
     {
-        lock (_gate)
-        {
-            _stateMachine.Initialize(
+        WithStateLock(
+            () => _stateMachine.Initialize(
                 _clock.UtcNow,
                 GetRandomElectionTimeout(),
-                _settings.HeartbeatInterval);
-            SignalScheduleChangeUnsafe();
-        }
+                _settings.HeartbeatInterval),
+            signalScheduleChange: true);
     }
 
     /// <summary>
@@ -57,15 +55,12 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Vote decision.</returns>
     public VoteDecision HandleRequestVote(RaftVoteRequest request)
     {
-        lock (_gate)
-        {
-            var decision = _stateMachine.HandleRequestVote(
+        return WithStateLock(
+            () => _stateMachine.HandleRequestVote(
                 request,
                 _clock.UtcNow,
-                GetRandomElectionTimeout());
-            SignalScheduleChangeUnsafe();
-            return decision;
-        }
+                GetRandomElectionTimeout()),
+            signalScheduleChange: true);
     }
 
     /// <summary>
@@ -75,15 +70,12 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Append entries decision.</returns>
     public AppendEntriesDecision HandleAppendEntries(RaftAppendEntriesRequest request)
     {
-        lock (_gate)
-        {
-            var decision = _stateMachine.HandleAppendEntries(
+        return WithStateLock(
+            () => _stateMachine.HandleAppendEntries(
                 request,
                 _clock.UtcNow,
-                GetRandomElectionTimeout());
-            SignalScheduleChangeUnsafe();
-            return decision;
-        }
+                GetRandomElectionTimeout()),
+            signalScheduleChange: true);
     }
 
     /// <summary>
@@ -92,15 +84,12 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Timeout action.</returns>
     public TimeoutAction PrepareTimeoutAction()
     {
-        lock (_gate)
-        {
-            var action = _stateMachine.PrepareTimeoutAction(
+        return WithStateLock(
+            () => _stateMachine.PrepareTimeoutAction(
                 _clock.UtcNow,
                 GetRandomElectionTimeout(),
-                _settings.HeartbeatInterval);
-            SignalScheduleChangeUnsafe();
-            return action;
-        }
+                _settings.HeartbeatInterval),
+            signalScheduleChange: true);
     }
 
     /// <summary>
@@ -110,19 +99,12 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Vote response decision.</returns>
     public VoteResponseDecision HandleVoteResponse(RaftVoteResponse response)
     {
-        lock (_gate)
-        {
-            var decision = _stateMachine.HandleVoteResponse(
+        return WithStateLock(
+            () => _stateMachine.HandleVoteResponse(
                 response,
                 _clock.UtcNow,
-                GetRandomElectionTimeout());
-            if (decision.Events.Count > 0 || decision.BecameLeader)
-            {
-                SignalScheduleChangeUnsafe();
-            }
-
-            return decision;
-        }
+                GetRandomElectionTimeout()),
+            static decision => decision.Events.Count > 0 || decision.BecameLeader);
     }
 
     /// <summary>
@@ -132,19 +114,12 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Append entries response decision.</returns>
     public AppendEntriesResponseDecision HandleAppendEntriesResponse(RaftAppendEntriesResponse response)
     {
-        lock (_gate)
-        {
-            var decision = _stateMachine.HandleAppendEntriesResponse(
+        return WithStateLock(
+            () => _stateMachine.HandleAppendEntriesResponse(
                 response,
                 _clock.UtcNow,
-                GetRandomElectionTimeout());
-            if (decision.Events.Count > 0)
-            {
-                SignalScheduleChangeUnsafe();
-            }
-
-            return decision;
-        }
+                GetRandomElectionTimeout()),
+            static decision => decision.Events.Count > 0);
     }
 
     /// <summary>
@@ -153,10 +128,9 @@ internal sealed class RaftNodeCoordinator
     /// <param name="peerId">Peer identifier.</param>
     public void RegisterHeartbeatAck(FromId peerId)
     {
-        lock (_gate)
-        {
-            _stateMachine.RegisterHeartbeatAck(peerId, _clock.UtcNow);
-        }
+        WithStateLock(
+            () => _stateMachine.RegisterHeartbeatAck(peerId, _clock.UtcNow),
+            signalScheduleChange: false);
     }
 
     /// <summary>
@@ -166,10 +140,9 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Out-of-quorum event, or null.</returns>
     public RaftEvent? BuildQuorumEvent(TimeSpan window)
     {
-        lock (_gate)
-        {
-            return _stateMachine.BuildQuorumEvent(_clock.UtcNow, window);
-        }
+        return WithStateLock(
+            () => _stateMachine.BuildQuorumEvent(_clock.UtcNow, window),
+            signalScheduleChange: false);
     }
 
     /// <summary>
@@ -178,10 +151,9 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Delay until next action.</returns>
     public TimeSpan GetNextDelay()
     {
-        lock (_gate)
-        {
-            return _stateMachine.GetNextDelay(_clock.UtcNow);
-        }
+        return WithStateLock(
+            () => _stateMachine.GetNextDelay(_clock.UtcNow),
+            signalScheduleChange: false);
     }
 
     /// <summary>
@@ -190,14 +162,53 @@ internal sealed class RaftNodeCoordinator
     /// <returns>Status snapshot.</returns>
     public RaftStatus GetStatus()
     {
-        lock (_gate)
-        {
-            return _stateMachine.GetStatus();
-        }
+        return WithStateLock(
+            _stateMachine.GetStatus,
+            signalScheduleChange: false);
     }
 
     private TimeSpan GetRandomElectionTimeout() =>
         _delayProvider.GetDelay(_settings.MinElectionTimeout, _settings.MaxElectionTimeout);
+
+    private void WithStateLock(Action action, bool signalScheduleChange)
+    {
+        lock (_gate)
+        {
+            action();
+            if (signalScheduleChange)
+            {
+                SignalScheduleChangeUnsafe();
+            }
+        }
+    }
+
+    private T WithStateLock<T>(Func<T> action, bool signalScheduleChange)
+    {
+        lock (_gate)
+        {
+            var result = action();
+            if (signalScheduleChange)
+            {
+                SignalScheduleChangeUnsafe();
+            }
+
+            return result;
+        }
+    }
+
+    private T WithStateLock<T>(Func<T> action, Func<T, bool> shouldSignalScheduleChange)
+    {
+        lock (_gate)
+        {
+            var result = action();
+            if (shouldSignalScheduleChange(result))
+            {
+                SignalScheduleChangeUnsafe();
+            }
+
+            return result;
+        }
+    }
 
     private void SignalScheduleChangeUnsafe() =>
         _runtime.Signal();
