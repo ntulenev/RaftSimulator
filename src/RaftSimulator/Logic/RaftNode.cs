@@ -68,7 +68,7 @@ internal sealed class RaftNode : IRaftNode
 
         var decision = _coordinator.HandleRequestVote(request);
 
-        LogEvents(decision.Events);
+        PublishDecision(decision);
         return Task.FromResult(decision.Response);
     }
 
@@ -82,11 +82,7 @@ internal sealed class RaftNode : IRaftNode
 
         var decision = _coordinator.HandleAppendEntries(request);
 
-        LogEvents(decision.Events);
-        if (decision.StatusSnapshot is not null)
-        {
-            _log.WriteNodeStatus(decision.StatusSnapshot);
-        }
+        PublishDecision(decision);
 
         return Task.FromResult(decision.Response);
     }
@@ -105,7 +101,7 @@ internal sealed class RaftNode : IRaftNode
         }
 
         var action = PrepareTimeoutAction();
-        LogEvents(action.Events);
+        PublishAction(action);
 
         if (action.Type == TimeoutActionType.Heartbeats)
         {
@@ -129,12 +125,7 @@ internal sealed class RaftNode : IRaftNode
     {
         var decision = _coordinator.HandleVoteResponse(response);
 
-        LogEvents(decision.Events);
-
-        if (decision.StatusSnapshot is not null)
-        {
-            _log.WriteNodeStatus(decision.StatusSnapshot);
-        }
+        PublishDecision(decision);
 
         if (decision.BecameLeader)
         {
@@ -190,7 +181,36 @@ internal sealed class RaftNode : IRaftNode
     {
         var decision = _coordinator.HandleAppendEntriesResponse(response);
 
+        PublishDecision(decision);
+    }
+
+    private void PublishAction(TimeoutAction action) =>
+        LogEvents(action.Events);
+
+    private void PublishDecision(VoteDecision decision) =>
         LogEvents(decision.Events);
+
+    private void PublishDecision(AppendEntriesResponseDecision decision) =>
+        LogEvents(decision.Events);
+
+    private void PublishDecision(AppendEntriesDecision decision)
+    {
+        LogEvents(decision.Events);
+        PublishStatus(decision.StatusSnapshot);
+    }
+
+    private void PublishDecision(VoteResponseDecision decision)
+    {
+        LogEvents(decision.Events);
+        PublishStatus(decision.StatusSnapshot);
+    }
+
+    private void PublishStatus(RaftStatus? status)
+    {
+        if (status is not null)
+        {
+            _log.WriteNodeStatus(status);
+        }
     }
 
     private void LogEvents(IEnumerable<RaftEvent> events)
