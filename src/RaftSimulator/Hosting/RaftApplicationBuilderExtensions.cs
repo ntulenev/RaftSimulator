@@ -24,26 +24,53 @@ internal static class RaftApplicationBuilderExtensions
 
         var raftSection = builder.Configuration.GetSection("Raft");
         var settings = RaftSettingsFactory.FromOptions(raftSection.Get<RaftOptions>() ?? new RaftOptions());
+
+        builder.ConfigureRaftUrl(settings);
+        _ = builder.Services
+            .AddRaftOptions(raftSection)
+            .AddRaftCoreServices()
+            .AddRaftHttpClient();
+
+        return settings;
+    }
+
+    private static void ConfigureRaftUrl(this WebApplicationBuilder builder, RaftSettings settings) =>
         _ = builder.WebHost.UseUrls($"http://localhost:{settings.Port}");
 
-        _ = builder.Services.Configure<RaftOptions>(raftSection);
-        _ = builder.Services.AddSingleton<IValidateOptions<RaftOptions>, RaftOptionsValidator>();
-        _ = builder.Services.AddSingleton(sp =>
+    private static IServiceCollection AddRaftOptions(
+        this IServiceCollection services,
+        IConfiguration raftSection)
+    {
+        _ = services.Configure<RaftOptions>(raftSection);
+        _ = services.AddSingleton<IValidateOptions<RaftOptions>, RaftOptionsValidator>();
+        _ = services.AddSingleton(sp =>
             RaftSettingsFactory.FromOptions(sp.GetRequiredService<IOptions<RaftOptions>>().Value));
-        _ = builder.Services.AddSingleton<IRaftClock, SystemRaftClock>();
-        _ = builder.Services.AddSingleton<IRaftRandom, CryptoRaftRandom>();
-        _ = builder.Services.AddSingleton<IRaftDelayProvider, RaftDelayProvider>();
-        _ = builder.Services.AddSingleton<IRaftScheduler, RaftScheduler>();
-        _ = builder.Services.AddSingleton<IRaftNodeRuntime, RaftNodeRuntime>();
-        _ = builder.Services.AddSingleton<RaftNodeCoordinator>();
-        _ = builder.Services.AddSingleton<IRaftLog, SpectreRaftLog>();
-        _ = builder.Services.AddSingleton<IRaftEventLog, RaftEventLog>();
-        _ = builder.Services.AddSingleton<IRaftPeerBroadcaster, RaftPeerBroadcaster>();
-        _ = builder.Services.AddSingleton<IRaftElectionRunner, RaftElectionRunner>();
-        _ = builder.Services.AddSingleton<IRaftHeartbeatRunner, RaftHeartbeatRunner>();
-        _ = builder.Services.AddSingleton<IRaftNode, RaftNode>();
-        _ = builder.Services.AddHostedService<RaftHostedService>();
-        _ = builder.Services.AddHttpClient<IRaftPeerClient, RaftPeerClient>((sp, client) =>
+
+        return services;
+    }
+
+    private static IServiceCollection AddRaftCoreServices(this IServiceCollection services)
+    {
+        _ = services.AddSingleton<IRaftClock, SystemRaftClock>();
+        _ = services.AddSingleton<IRaftRandom, CryptoRaftRandom>();
+        _ = services.AddSingleton<IRaftDelayProvider, RaftDelayProvider>();
+        _ = services.AddSingleton<IRaftScheduler, RaftScheduler>();
+        _ = services.AddSingleton<IRaftNodeRuntime, RaftNodeRuntime>();
+        _ = services.AddSingleton<RaftNodeCoordinator>();
+        _ = services.AddSingleton<IRaftLog, SpectreRaftLog>();
+        _ = services.AddSingleton<IRaftEventLog, RaftEventLog>();
+        _ = services.AddSingleton<IRaftPeerBroadcaster, RaftPeerBroadcaster>();
+        _ = services.AddSingleton<IRaftElectionRunner, RaftElectionRunner>();
+        _ = services.AddSingleton<IRaftHeartbeatRunner, RaftHeartbeatRunner>();
+        _ = services.AddSingleton<IRaftNode, RaftNode>();
+        _ = services.AddHostedService<RaftHostedService>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddRaftHttpClient(this IServiceCollection services)
+    {
+        _ = services.AddHttpClient<IRaftPeerClient, RaftPeerClient>((sp, client) =>
         {
             var settings = sp.GetRequiredService<RaftSettings>();
             var maxTimeoutMs = settings.MinElectionTimeout.TotalMilliseconds / 2;
@@ -51,6 +78,6 @@ internal static class RaftApplicationBuilderExtensions
             client.Timeout = TimeSpan.FromMilliseconds(Math.Max(200, timeoutMs));
         });
 
-        return settings;
+        return services;
     }
 }
