@@ -205,6 +205,9 @@ internal sealed class RaftNodeState
         _lastHeartbeatAckAt[peerId] = now;
     }
 
+    internal IReadOnlyDictionary<int, DateTimeOffset> GetLastHeartbeatAckSnapshot() =>
+        new Dictionary<int, DateTimeOffset>(_lastHeartbeatAckAt);
+
     private void ResetLeaderTracking()
     {
         LeaderSince = default;
@@ -258,11 +261,6 @@ internal sealed class RaftNodeState
     /// Gets next heartbeat deadline.
     /// </summary>
     public DateTimeOffset NextHeartbeatAt { get; private set; }
-
-    /// <summary>
-    /// Gets last successful heartbeat acknowledgement time by peer identifier.
-    /// </summary>
-    public IReadOnlyDictionary<int, DateTimeOffset> LastHeartbeatAckAt => _lastHeartbeatAckAt;
 
     private readonly Dictionary<int, DateTimeOffset> _lastHeartbeatAckAt = [];
 }

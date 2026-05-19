@@ -250,7 +250,7 @@ internal sealed class RaftStateMachine
 
         return RaftQuorumEvaluator.BuildOutOfQuorumEvent(
             _settings.Peers,
-            State.LastHeartbeatAckAt,
+            State.GetLastHeartbeatAckSnapshot(),
             _settings.Majority,
             _settings.NodeCount,
             now,

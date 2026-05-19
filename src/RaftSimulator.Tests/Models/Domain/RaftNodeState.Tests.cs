@@ -48,7 +48,7 @@ public sealed class RaftNodeStateTests
         state.LeaderId.Should().Be(new LeaderId(3));
         state.VotedFor.Should().BeNull();
         state.LeaderSince.Should().Be(default);
-        state.LastHeartbeatAckAt.Should().BeEmpty();
+        state.GetLastHeartbeatAckSnapshot().Should().BeEmpty();
     }
 
     [Fact(DisplayName = "BecomeLeader records local leader state")]
@@ -71,6 +71,28 @@ public sealed class RaftNodeStateTests
         state.VotesReceived.Should().Be(0);
         state.NextHeartbeatAt.Should().Be(now);
         state.LeaderSince.Should().Be(now);
+    }
+
+    [Fact(DisplayName = "Heartbeat ack snapshot does not expose mutable state")]
+    [Trait("Category", "Unit")]
+    public void HeartbeatAckSnapshotDoesNotExposeMutableState()
+    {
+        // Arrange
+        var state = new RaftNodeState();
+        var now = TestNow;
+        state.InitializeFollower(now, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(1));
+        state.StartElection(1, now, TimeSpan.FromSeconds(4));
+        state.RecordGrantedVote();
+        state.BecomeLeader(1, 2, now);
+        state.RegisterHeartbeatAck(2, now);
+
+        // Act
+        var snapshot = state.GetLastHeartbeatAckSnapshot();
+        state.BecomeFollower(2, null, now, TimeSpan.FromSeconds(4));
+
+        // Assert
+        snapshot.Should().ContainSingle().Which.Should().Be(new KeyValuePair<int, DateTimeOffset>(2, now));
+        state.GetLastHeartbeatAckSnapshot().Should().BeEmpty();
     }
 
     [Fact(DisplayName = "TryGrantVote records vote only when request is grantable")]
