@@ -6,23 +6,23 @@ namespace RaftSimulator.Logic;
 /// <summary>
 /// Append-entries response transitions for the raft state machine.
 /// </summary>
-internal sealed partial class RaftStateMachine
+internal sealed class RaftAppendEntriesResponseHandler
 {
-    /// <summary>
-    /// Handles an append-entries response from a peer.
-    /// </summary>
-    /// <param name="response">Append entries response.</param>
-    /// <param name="now">Current time.</param>
-    /// <param name="electionTimeout">Next election timeout.</param>
-    /// <returns>Append entries response decision.</returns>
-    public AppendEntriesResponseDecision HandleAppendEntriesResponse(
+    internal RaftAppendEntriesResponseHandler(RaftStateMachineContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        _context = context;
+    }
+
+    internal AppendEntriesResponseDecision Handle(
         RaftAppendEntriesResponse response,
         DateTimeOffset now,
         TimeSpan electionTimeout)
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        if (!response.HasHigherTermThan(State.CurrentTerm))
+        if (!response.HasHigherTermThan(_context.State.CurrentTerm))
         {
             return new AppendEntriesResponseDecision([]);
         }
@@ -30,7 +30,9 @@ internal sealed partial class RaftStateMachine
         return new AppendEntriesResponseDecision(
         [
             new HigherTermDiscoveredEvent(response.Term, response.FromId),
-            BecomeFollower(response.Term.Value, null, now, electionTimeout)
+            _context.BecomeFollower(response.Term.Value, null, now, electionTimeout)
         ]);
     }
+
+    private readonly RaftStateMachineContext _context;
 }

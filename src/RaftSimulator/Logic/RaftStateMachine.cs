@@ -7,7 +7,7 @@ namespace RaftSimulator.Logic;
 /// <summary>
 /// Pure raft election state transitions for a single node.
 /// </summary>
-internal sealed partial class RaftStateMachine
+internal sealed class RaftStateMachine
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RaftStateMachine"/> class.
@@ -17,13 +17,18 @@ internal sealed partial class RaftStateMachine
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        _settings = settings;
+        _context = new RaftStateMachineContext(settings);
+        _requestVoteHandler = new RaftRequestVoteHandler(_context);
+        _appendEntriesHandler = new RaftAppendEntriesHandler(_context);
+        _timeoutHandler = new RaftTimeoutHandler(_context);
+        _voteResponseHandler = new RaftVoteResponseHandler(_context);
+        _appendEntriesResponseHandler = new RaftAppendEntriesResponseHandler(_context);
     }
 
     /// <summary>
     /// Gets local node identifier.
     /// </summary>
-    public int Id => _settings.NodeId;
+    public int Id => _context.Id;
 
     /// <summary>
     /// Initializes state as a follower.
@@ -36,9 +41,74 @@ internal sealed partial class RaftStateMachine
         TimeSpan electionTimeout,
         TimeSpan heartbeatInterval)
     {
-        State.InitializeFollower(now, electionTimeout, heartbeatInterval);
-        _statusReporter.Reset();
+        _context.State.InitializeFollower(now, electionTimeout, heartbeatInterval);
+        _context.StatusReporter.Reset();
     }
+
+    /// <summary>
+    /// Handles a request-vote RPC.
+    /// </summary>
+    /// <param name="request">Vote request.</param>
+    /// <param name="now">Current time.</param>
+    /// <param name="electionTimeout">Next election timeout.</param>
+    /// <returns>Vote decision.</returns>
+    public VoteDecision HandleRequestVote(
+        RaftVoteRequest request,
+        DateTimeOffset now,
+        TimeSpan electionTimeout) =>
+        _requestVoteHandler.Handle(request, now, electionTimeout);
+
+    /// <summary>
+    /// Handles an append-entries RPC.
+    /// </summary>
+    /// <param name="request">Append entries request.</param>
+    /// <param name="now">Current time.</param>
+    /// <param name="electionTimeout">Next election timeout.</param>
+    /// <returns>Append entries decision.</returns>
+    public AppendEntriesDecision HandleAppendEntries(
+        RaftAppendEntriesRequest request,
+        DateTimeOffset now,
+        TimeSpan electionTimeout) =>
+        _appendEntriesHandler.Handle(request, now, electionTimeout);
+
+    /// <summary>
+    /// Prepares work for the next elapsed timeout.
+    /// </summary>
+    /// <param name="now">Current time.</param>
+    /// <param name="electionTimeout">Next election timeout.</param>
+    /// <param name="heartbeatInterval">Heartbeat interval.</param>
+    /// <returns>Timeout action.</returns>
+    public TimeoutAction PrepareTimeoutAction(
+        DateTimeOffset now,
+        TimeSpan electionTimeout,
+        TimeSpan heartbeatInterval) =>
+        _timeoutHandler.Prepare(now, electionTimeout, heartbeatInterval);
+
+    /// <summary>
+    /// Handles a vote response from a peer.
+    /// </summary>
+    /// <param name="response">Vote response.</param>
+    /// <param name="now">Current time.</param>
+    /// <param name="electionTimeout">Next election timeout.</param>
+    /// <returns>Vote response decision.</returns>
+    public VoteResponseDecision HandleVoteResponse(
+        RaftVoteResponse response,
+        DateTimeOffset now,
+        TimeSpan electionTimeout) =>
+        _voteResponseHandler.Handle(response, now, electionTimeout);
+
+    /// <summary>
+    /// Handles an append-entries response from a peer.
+    /// </summary>
+    /// <param name="response">Append entries response.</param>
+    /// <param name="now">Current time.</param>
+    /// <param name="electionTimeout">Next election timeout.</param>
+    /// <returns>Append entries response decision.</returns>
+    public AppendEntriesResponseDecision HandleAppendEntriesResponse(
+        RaftAppendEntriesResponse response,
+        DateTimeOffset now,
+        TimeSpan electionTimeout) =>
+        _appendEntriesResponseHandler.Handle(response, now, electionTimeout);
 
     /// <summary>
     /// Registers a successful heartbeat acknowledgement.
@@ -49,7 +119,7 @@ internal sealed partial class RaftStateMachine
     {
         ArgumentNullException.ThrowIfNull(peerId);
 
-        State.RegisterHeartbeatAck(peerId.Value, now);
+        _context.State.RegisterHeartbeatAck(peerId.Value, now);
     }
 
     /// <summary>
@@ -60,16 +130,16 @@ internal sealed partial class RaftStateMachine
     /// <returns>Out-of-quorum event, or null when quorum is available or not yet reportable.</returns>
     public RaftEvent? BuildQuorumEvent(DateTimeOffset now, TimeSpan window)
     {
-        if (State.LeaderSince == default || now - State.LeaderSince < window)
+        if (_context.State.LeaderSince == default || now - _context.State.LeaderSince < window)
         {
             return null;
         }
 
         return RaftQuorumEvaluator.BuildOutOfQuorumEvent(
-            _settings.Peers,
-            State.GetLastHeartbeatAckSnapshot(),
-            _settings.Majority,
-            _settings.NodeCount,
+            _context.Settings.Peers,
+            _context.State.GetLastHeartbeatAckSnapshot(),
+            _context.Settings.Majority,
+            _context.Settings.NodeCount,
             now,
             window);
     }
@@ -81,9 +151,9 @@ internal sealed partial class RaftStateMachine
     /// <returns>Delay until the next action.</returns>
     public TimeSpan GetNextDelay(DateTimeOffset now)
     {
-        var deadline = State.Role == RaftRole.Leader
-            ? State.NextHeartbeatAt
-            : State.NextElectionDeadline;
+        var deadline = _context.State.Role == RaftRole.Leader
+            ? _context.State.NextHeartbeatAt
+            : _context.State.NextElectionDeadline;
         return deadline - now;
     }
 
@@ -92,46 +162,12 @@ internal sealed partial class RaftStateMachine
     /// </summary>
     /// <returns>Status snapshot.</returns>
     public RaftStatus GetStatus() =>
-        new(new NodeId(Id), State.CurrentTerm, State.Role, State.LeaderId);
+        _context.GetStatus();
 
-    private VoteDecision CreateVoteDecision(bool granted, IReadOnlyList<RaftEvent> events) =>
-        new(new RaftVoteResponse(State.CurrentTerm, new FromId(Id), granted), events);
-
-    private static RaftEvent CreateVoteEvent(
-        RaftVoteRequest request,
-        bool granted,
-        Term term) =>
-        granted
-            ? new RequestVoteGrantedEvent(request.CandidateId, term)
-            : new RequestVoteDeniedEvent(request.CandidateId, term);
-
-    private AppendEntriesDecision CreateAppendEntriesDecision(
-        bool success,
-        IReadOnlyList<RaftEvent> events,
-        RaftStatus? statusSnapshot) =>
-        new(new RaftAppendEntriesResponse(State.CurrentTerm, new FromId(Id), success), events, statusSnapshot);
-
-    private static VoteResponseDecision CreateVoteResponseDecision(
-        IReadOnlyList<RaftEvent> events,
-        bool becameLeader,
-        Term term,
-        RaftStatus? statusSnapshot) =>
-        new(events, becameLeader, term, statusSnapshot);
-
-    private BecameFollowerEvent BecomeFollower(
-        int term,
-        int? leaderId,
-        DateTimeOffset now,
-        TimeSpan electionTimeout)
-    {
-        State.BecomeFollower(term, leaderId, now, electionTimeout);
-        return new BecameFollowerEvent(
-            State.CurrentTerm,
-            leaderId is null ? null : new LeaderId(leaderId.Value));
-    }
-
-    private readonly RaftSettings _settings;
-    private readonly RaftStatusReporter _statusReporter = new();
-
-    private RaftNodeState State { get; } = new();
+    private readonly RaftStateMachineContext _context;
+    private readonly RaftRequestVoteHandler _requestVoteHandler;
+    private readonly RaftAppendEntriesHandler _appendEntriesHandler;
+    private readonly RaftTimeoutHandler _timeoutHandler;
+    private readonly RaftVoteResponseHandler _voteResponseHandler;
+    private readonly RaftAppendEntriesResponseHandler _appendEntriesResponseHandler;
 }
