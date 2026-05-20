@@ -109,6 +109,7 @@ public sealed class RaftNodeRuntimeTests
         // Arrange
         var settings = CreateSettings();
         var clock = new TestClock();
+        var log = new TestRaftLog();
         var eventLog = new TestRaftEventLog();
         using var cancellation = new CancellationTokenSource();
         var electionRunner = new SpyElectionRunner
@@ -123,19 +124,21 @@ public sealed class RaftNodeRuntimeTests
                 cancellation,
                 () => clock.Advance(TimeSpan.FromSeconds(5)),
                 () => clock.Advance(TimeSpan.FromSeconds(2))),
-            new TestRaftLog());
+            log);
+        var coordinator = new RaftNodeCoordinator(
+            settings,
+            clock,
+            new FixedDelayProvider(),
+            runtime);
+        var publisher = new RaftDecisionPublisher(settings, log, eventLog);
         var node = new RaftNode(
             settings,
-            new TestRaftLog(),
-            eventLog,
             runtime,
-            new RaftNodeCoordinator(
-                settings,
-                clock,
-                new FixedDelayProvider(),
-                runtime),
+            coordinator,
             electionRunner,
-            new SpyHeartbeatRunner());
+            new SpyHeartbeatRunner(),
+            publisher,
+            new RaftQuorumReporter(settings, coordinator, publisher));
 
         // Act
         await node.RunAsync(cancellation.Token);
@@ -185,18 +188,20 @@ public sealed class RaftNodeRuntimeTests
         {
             Scheduler = new TimeoutThenCancelScheduler(RunCancellation, () => BeforeTimeout());
             Runtime = new RaftNodeRuntime(Scheduler, Log);
+            var coordinator = new RaftNodeCoordinator(
+                Settings,
+                Clock,
+                new FixedDelayProvider(),
+                Runtime);
+            var publisher = new RaftDecisionPublisher(Settings, Log, EventLog);
             Node = new RaftNode(
                 Settings,
-                Log,
-                EventLog,
                 Runtime,
-                new RaftNodeCoordinator(
-                    Settings,
-                    Clock,
-                    new FixedDelayProvider(),
-                    Runtime),
+                coordinator,
                 ElectionRunner,
-                HeartbeatRunner);
+                HeartbeatRunner,
+                publisher,
+                new RaftQuorumReporter(Settings, coordinator, publisher));
         }
 
         public RaftSettings Settings { get; } = CreateSettings();

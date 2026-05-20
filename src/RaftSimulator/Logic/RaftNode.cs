@@ -1,7 +1,6 @@
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
-using RaftSimulator.Models.Domain.Events;
 
 namespace RaftSimulator.Logic;
 
@@ -14,36 +13,36 @@ internal sealed class RaftNode : IRaftNode
     /// Initializes a new instance of the <see cref="RaftNode"/> class.
     /// </summary>
     /// <param name="settings">Raft settings.</param>
-    /// <param name="log">Log sink.</param>
-    /// <param name="eventLog">Event log sink.</param>
     /// <param name="runtime">Runtime loop.</param>
     /// <param name="coordinator">Node state coordinator.</param>
     /// <param name="electionRunner">Election runner.</param>
     /// <param name="heartbeatRunner">Heartbeat runner.</param>
+    /// <param name="publisher">Decision publisher.</param>
+    /// <param name="quorumReporter">Quorum reporter.</param>
     public RaftNode(
         RaftSettings settings,
-        IRaftLog log,
-        IRaftEventLog eventLog,
         IRaftNodeRuntime runtime,
         RaftNodeCoordinator coordinator,
         IRaftElectionRunner electionRunner,
-        IRaftHeartbeatRunner heartbeatRunner)
+        IRaftHeartbeatRunner heartbeatRunner,
+        RaftDecisionPublisher publisher,
+        RaftQuorumReporter quorumReporter)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(log);
-        ArgumentNullException.ThrowIfNull(eventLog);
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(coordinator);
         ArgumentNullException.ThrowIfNull(electionRunner);
         ArgumentNullException.ThrowIfNull(heartbeatRunner);
+        ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(quorumReporter);
 
         _settings = settings;
-        _log = log;
-        _eventLog = eventLog;
         _runtime = runtime;
         _coordinator = coordinator;
         _electionRunner = electionRunner;
         _heartbeatRunner = heartbeatRunner;
+        _publisher = publisher;
+        _quorumReporter = quorumReporter;
     }
 
     /// <inheritdoc />
@@ -68,7 +67,7 @@ internal sealed class RaftNode : IRaftNode
 
         var decision = _coordinator.HandleRequestVote(request);
 
-        PublishDecision(decision);
+        _publisher.Publish(decision);
         return Task.FromResult(decision.Response);
     }
 
@@ -82,7 +81,7 @@ internal sealed class RaftNode : IRaftNode
 
         var decision = _coordinator.HandleAppendEntries(request);
 
-        PublishDecision(decision);
+        _publisher.Publish(decision);
 
         return Task.FromResult(decision.Response);
     }
@@ -101,7 +100,7 @@ internal sealed class RaftNode : IRaftNode
         }
 
         var action = PrepareTimeoutAction();
-        PublishAction(action);
+        _publisher.Publish(action);
 
         if (action.Type == TimeoutActionType.Heartbeats)
         {
@@ -125,7 +124,7 @@ internal sealed class RaftNode : IRaftNode
     {
         var decision = _coordinator.HandleVoteResponse(response);
 
-        PublishDecision(decision);
+        _publisher.Publish(decision);
 
         if (decision.BecameLeader)
         {
@@ -135,7 +134,7 @@ internal sealed class RaftNode : IRaftNode
 
     private async Task SendHeartbeatsAsync(Term term, CancellationToken cancellationToken)
     {
-        ReportQuorum();
+        _quorumReporter.Report();
 
         var result = await _heartbeatRunner
             .SendHeartbeatsAsync(term, new LeaderId(Id), cancellationToken)
@@ -162,73 +161,18 @@ internal sealed class RaftNode : IRaftNode
         _coordinator.RegisterHeartbeatAck(new FromId(peerId));
     }
 
-    private void ReportQuorum()
-    {
-        RaftEvent? quorumEvent;
-
-        quorumEvent = _coordinator.BuildQuorumEvent(GetQuorumWindow());
-
-        if (quorumEvent is not null)
-        {
-            LogEvent(quorumEvent);
-        }
-    }
-
-    private TimeSpan GetQuorumWindow() =>
-        _settings.HeartbeatInterval + _settings.MaxNetworkDelay;
-
     private void HandleAppendEntriesResponse(RaftAppendEntriesResponse response)
     {
         var decision = _coordinator.HandleAppendEntriesResponse(response);
 
-        PublishDecision(decision);
+        _publisher.Publish(decision);
     }
-
-    private void PublishAction(TimeoutAction action) =>
-        LogEvents(action.Events);
-
-    private void PublishDecision(VoteDecision decision) =>
-        LogEvents(decision.Events);
-
-    private void PublishDecision(AppendEntriesResponseDecision decision) =>
-        LogEvents(decision.Events);
-
-    private void PublishDecision(AppendEntriesDecision decision)
-    {
-        LogEvents(decision.Events);
-        PublishStatus(decision.StatusSnapshot);
-    }
-
-    private void PublishDecision(VoteResponseDecision decision)
-    {
-        LogEvents(decision.Events);
-        PublishStatus(decision.StatusSnapshot);
-    }
-
-    private void PublishStatus(RaftStatus? status)
-    {
-        if (status is not null)
-        {
-            _log.WriteNodeStatus(status);
-        }
-    }
-
-    private void LogEvents(IEnumerable<RaftEvent> events)
-    {
-        foreach (var raftEvent in events)
-        {
-            LogEvent(raftEvent);
-        }
-    }
-
-    private void LogEvent(RaftEvent raftEvent) =>
-        _eventLog.WriteNodeEvent(Id, raftEvent);
 
     private readonly RaftSettings _settings;
-    private readonly IRaftLog _log;
-    private readonly IRaftEventLog _eventLog;
     private readonly IRaftNodeRuntime _runtime;
     private readonly RaftNodeCoordinator _coordinator;
     private readonly IRaftElectionRunner _electionRunner;
     private readonly IRaftHeartbeatRunner _heartbeatRunner;
+    private readonly RaftDecisionPublisher _publisher;
+    private readonly RaftQuorumReporter _quorumReporter;
 }
