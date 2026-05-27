@@ -19,15 +19,8 @@ internal sealed record AppendEntriesDecision
         RaftStatus? statusSnapshot)
     {
         ArgumentNullException.ThrowIfNull(response);
-        ArgumentNullException.ThrowIfNull(events);
-
-        if (events.Any(static @event => @event is null))
-        {
-            throw new ArgumentException("Events must not contain null items.", nameof(events));
-        }
-
         Response = response;
-        Events = events;
+        Events = RaftEventListGuard.RequireValid(events, nameof(events));
         StatusSnapshot = statusSnapshot;
     }
 

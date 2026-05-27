@@ -24,16 +24,9 @@ internal sealed record TimeoutAction
         }
 
         ArgumentNullException.ThrowIfNull(term);
-        ArgumentNullException.ThrowIfNull(events);
-
-        if (events.Any(static @event => @event is null))
-        {
-            throw new ArgumentException("Events must not contain null items.", nameof(events));
-        }
-
         Type = type;
         Term = term;
-        Events = events;
+        Events = RaftEventListGuard.RequireValid(events, nameof(events));
     }
 
     /// <summary>

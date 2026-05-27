@@ -13,14 +13,7 @@ internal sealed record AppendEntriesResponseDecision
     /// <param name="events">Events emitted by the decision.</param>
     public AppendEntriesResponseDecision(IReadOnlyList<RaftEvent> events)
     {
-        ArgumentNullException.ThrowIfNull(events);
-
-        if (events.Any(static @event => @event is null))
-        {
-            throw new ArgumentException("Events must not contain null items.", nameof(events));
-        }
-
-        Events = events;
+        Events = RaftEventListGuard.RequireValid(events, nameof(events));
     }
 
     /// <summary>

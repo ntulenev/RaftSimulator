@@ -20,15 +20,9 @@ internal sealed record VoteResponseDecision
         Term term,
         RaftStatus? statusSnapshot)
     {
-        ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(term);
 
-        if (events.Any(static @event => @event is null))
-        {
-            throw new ArgumentException("Events must not contain null items.", nameof(events));
-        }
-
-        Events = events;
+        Events = RaftEventListGuard.RequireValid(events, nameof(events));
         BecameLeader = becameLeader;
         Term = term;
         StatusSnapshot = statusSnapshot;
