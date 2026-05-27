@@ -6,26 +6,13 @@ namespace RaftSimulator.API;
 /// <summary>
 /// Validates request-vote endpoint payloads.
 /// </summary>
-internal sealed class RequestVoteValidationFilter : IEndpointFilter
+internal sealed class RequestVoteValidationFilter : RaftRequestValidationFilter<RaftVoteRequestDto>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RequestVoteValidationFilter"/> class.
     /// </summary>
     public RequestVoteValidationFilter()
+        : base(RaftDtoValidator.TryValidate)
     {
-    }
-
-    /// <inheritdoc />
-    public ValueTask<object?> InvokeAsync(
-        EndpointFilterInvocationContext context,
-        EndpointFilterDelegate next)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(next);
-
-        var request = context.GetArgument<RaftVoteRequestDto>(0);
-        return RaftDtoValidator.TryValidate(request, out var error)
-            ? next(context)
-            : ValueTask.FromResult<object?>(Results.BadRequest(error));
     }
 }
