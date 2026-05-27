@@ -4,6 +4,7 @@ using RaftSimulator.Abstractions;
 using RaftSimulator.Logic;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Tests.TestSupport;
 
 namespace RaftSimulator.Tests.Logic;
 
@@ -203,20 +204,6 @@ public sealed class RaftNodeCoordinatorTests
         };
 
         return RaftSettings.FromOptions(options);
-    }
-
-    private sealed class TestClock : IRaftClock
-    {
-        public DateTimeOffset UtcNow { get; private set; } =
-            new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
-
-        public void Advance(TimeSpan value) =>
-            UtcNow += value;
-    }
-
-    private sealed class FixedDelayProvider : IRaftDelayProvider
-    {
-        public TimeSpan GetDelay(TimeSpan min, TimeSpan max) => min;
     }
 
     private sealed class TestRuntime : IRaftNodeRuntime

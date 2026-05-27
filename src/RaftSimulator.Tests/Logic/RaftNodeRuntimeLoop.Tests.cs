@@ -2,7 +2,7 @@ using FluentAssertions;
 
 using RaftSimulator.Abstractions;
 using RaftSimulator.Logic;
-using RaftSimulator.Models.Domain;
+using RaftSimulator.Tests.TestSupport;
 
 namespace RaftSimulator.Tests.Logic;
 
@@ -116,18 +116,4 @@ public sealed class RaftNodeRuntimeLoopTests
         }
     }
 
-    private sealed class TestRaftLog : IRaftLog
-    {
-        public List<string> Messages { get; } = [];
-
-        public void WriteNode(int nodeId, string message) =>
-            Messages.Add(message);
-
-        public void WriteSystem(string message) =>
-            Messages.Add(message);
-
-        public void WriteNodeStatus(RaftStatus status)
-        {
-        }
-    }
 }

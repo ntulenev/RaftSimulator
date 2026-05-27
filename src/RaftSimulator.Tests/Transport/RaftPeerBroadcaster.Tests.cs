@@ -5,6 +5,7 @@ using Moq;
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Tests.TestSupport;
 using RaftSimulator.Transport;
 
 namespace RaftSimulator.Tests.Transport;
@@ -237,8 +238,4 @@ public sealed class RaftPeerBroadcasterTests
         return RaftSettings.FromOptions(options);
     }
 
-    private sealed class FixedDelayProvider : IRaftDelayProvider
-    {
-        public TimeSpan GetDelay(TimeSpan min, TimeSpan max) => min;
-    }
 }

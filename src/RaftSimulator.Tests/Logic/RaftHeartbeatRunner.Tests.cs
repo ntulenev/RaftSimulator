@@ -2,8 +2,8 @@ using FluentAssertions;
 
 using RaftSimulator.Abstractions;
 using RaftSimulator.Logic;
-using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Tests.TestSupport;
 
 namespace RaftSimulator.Tests.Logic;
 
@@ -34,7 +34,7 @@ public sealed class RaftHeartbeatRunnerTests
     public async Task SendHeartbeatsHandlesSuccessfulAppendEntriesResponses()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var response = new RaftAppendEntriesResponse(new Term(4), new FromId(2), true);
         var broadcaster = new TestBroadcaster
         {
@@ -66,7 +66,7 @@ public sealed class RaftHeartbeatRunnerTests
     public async Task SendHeartbeatsLogsUnavailableResponsesWithoutAcknowledging()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var broadcaster = new TestBroadcaster
         {
             HeartbeatResults = [PeerRpcResult<RaftAppendEntriesResponse>.Unavailable(peer)]
@@ -91,7 +91,7 @@ public sealed class RaftHeartbeatRunnerTests
     public async Task SendHeartbeatsLogsPeerFailures()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var broadcaster = new TestBroadcaster
         {
             HeartbeatResults =
@@ -120,7 +120,7 @@ public sealed class RaftHeartbeatRunnerTests
     public async Task SendHeartbeatsLogsTransportFailuresAsUnreachable()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var broadcaster = new TestBroadcaster
         {
             HeartbeatResults =
@@ -159,9 +159,6 @@ public sealed class RaftHeartbeatRunnerTests
         await nullLeaderAct.Should().ThrowAsync<ArgumentNullException>();
     }
 
-    private static PeerInfo CreatePeer(int id) =>
-        new(id, new Uri($"http://localhost:500{id}"));
-
     private sealed class TestBroadcaster : IRaftPeerBroadcaster
     {
         public IReadOnlyList<PeerRpcResult<RaftAppendEntriesResponse>> HeartbeatResults { get; init; } =
@@ -195,18 +192,4 @@ public sealed class RaftHeartbeatRunnerTests
         }
     }
 
-    private sealed class TestRaftLog : IRaftLog
-    {
-        public List<string> Messages { get; } = [];
-
-        public void WriteNode(int nodeId, string message) =>
-            Messages.Add(message);
-
-        public void WriteSystem(string message) =>
-            Messages.Add(message);
-
-        public void WriteNodeStatus(RaftStatus status)
-        {
-        }
-    }
 }

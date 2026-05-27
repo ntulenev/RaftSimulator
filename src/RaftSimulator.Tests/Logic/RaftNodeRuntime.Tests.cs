@@ -5,6 +5,7 @@ using RaftSimulator.Logic;
 using RaftSimulator.Models.Domain.Events;
 using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Tests.TestSupport;
 
 namespace RaftSimulator.Tests.Logic;
 
@@ -323,20 +324,6 @@ public sealed class RaftNodeRuntimeTests
         }
     }
 
-    private sealed class TestClock : IRaftClock
-    {
-        public DateTimeOffset UtcNow { get; private set; } =
-            new(2026, 5, 16, 12, 0, 0, TimeSpan.Zero);
-
-        public void Advance(TimeSpan value) =>
-            UtcNow += value;
-    }
-
-    private sealed class FixedDelayProvider : IRaftDelayProvider
-    {
-        public TimeSpan GetDelay(TimeSpan min, TimeSpan max) => min;
-    }
-
     private sealed class SpyElectionRunner : IRaftElectionRunner
     {
         public IReadOnlyList<RaftVoteResponse> VoteResults { get; set; } = [];
@@ -394,22 +381,6 @@ public sealed class RaftNodeRuntimeTests
             BeforeReportQuorum?.Invoke();
             return Task.FromResult(new HeartbeatRunResult(Responses, AckPeerIds));
         }
-    }
-
-    private sealed class TestRaftLog : IRaftLog
-    {
-        public List<string> Messages { get; } = [];
-
-        public List<RaftStatus> Statuses { get; } = [];
-
-        public void WriteNode(int nodeId, string message) =>
-            Messages.Add(message);
-
-        public void WriteSystem(string message) =>
-            Messages.Add(message);
-
-        public void WriteNodeStatus(RaftStatus status) =>
-            Statuses.Add(status);
     }
 
     private sealed class TestRaftEventLog : IRaftEventLog

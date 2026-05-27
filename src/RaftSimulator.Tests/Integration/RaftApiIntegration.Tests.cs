@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using RaftSimulator.Abstractions;
 using RaftSimulator.Models.Domain;
 using RaftSimulator.Contracts;
+using RaftSimulator.Tests.TestSupport;
 
 namespace RaftSimulator.Tests.Integration;
 
@@ -208,18 +209,4 @@ public sealed class RaftApiIntegrationTests
         public RaftStatus GetStatus() => Status;
     }
 
-    private sealed class TestRaftLog : IRaftLog
-    {
-        public void WriteNode(int nodeId, string message)
-        {
-        }
-
-        public void WriteSystem(string message)
-        {
-        }
-
-        public void WriteNodeStatus(RaftStatus status)
-        {
-        }
-    }
 }

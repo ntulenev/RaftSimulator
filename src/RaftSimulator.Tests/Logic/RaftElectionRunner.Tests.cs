@@ -2,8 +2,8 @@ using FluentAssertions;
 
 using RaftSimulator.Abstractions;
 using RaftSimulator.Logic;
-using RaftSimulator.Models.Configuration;
 using RaftSimulator.Models.Domain;
+using RaftSimulator.Tests.TestSupport;
 
 namespace RaftSimulator.Tests.Logic;
 
@@ -14,7 +14,7 @@ public sealed class RaftElectionRunnerTests
     public async Task StartElectionInvokesHandlerForSuccessfulVoteResponses()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var response = new RaftVoteResponse(new Term(3), new FromId(2), true);
         var broadcaster = new TestBroadcaster
         {
@@ -48,7 +48,7 @@ public sealed class RaftElectionRunnerTests
     public async Task StartElectionLogsUnavailableVoteResponsesWithoutInvokingHandler()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var broadcaster = new TestBroadcaster
         {
             VoteResults = [PeerRpcResult<RaftVoteResponse>.Unavailable(peer)]
@@ -78,7 +78,7 @@ public sealed class RaftElectionRunnerTests
     public async Task StartElectionLogsPeerFailures()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var broadcaster = new TestBroadcaster
         {
             VoteResults =
@@ -106,7 +106,7 @@ public sealed class RaftElectionRunnerTests
     public async Task StartElectionLogsTransportFailuresAsUnreachable()
     {
         // Arrange
-        var peer = CreatePeer(2);
+        var peer = TestPeerFactory.Create(2);
         var broadcaster = new TestBroadcaster
         {
             VoteResults =
@@ -152,9 +152,6 @@ public sealed class RaftElectionRunnerTests
         await nullCandidateAct.Should().ThrowAsync<ArgumentNullException>();
     }
 
-    private static PeerInfo CreatePeer(int id) =>
-        new(id, new Uri($"http://localhost:500{id}"));
-
     private sealed class TestBroadcaster : IRaftPeerBroadcaster
     {
         public IReadOnlyList<PeerRpcResult<RaftVoteResponse>> VoteResults { get; init; } = [];
@@ -187,18 +184,4 @@ public sealed class RaftElectionRunnerTests
         }
     }
 
-    private sealed class TestRaftLog : IRaftLog
-    {
-        public List<string> Messages { get; } = [];
-
-        public void WriteNode(int nodeId, string message) =>
-            Messages.Add(message);
-
-        public void WriteSystem(string message) =>
-            Messages.Add(message);
-
-        public void WriteNodeStatus(RaftStatus status)
-        {
-        }
-    }
 }
